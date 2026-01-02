@@ -1,32 +1,32 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { RotateCcw, Home, Play, Settings, Grid3X3, ChevronLeft, ChevronRight, Check, Lightbulb, X as XIcon, Map as MapIcon } from 'lucide-react';
 
 // --- 상수 및 데이터 ---
 const CUBE_SIZE = 100;
 const GAP = 10;
-const DRAG_SENSITIVITY = 0.6;
+const DRAG_SENSITIVITY = 0.8; // 모바일 반응성을 위해 감도 약간 상향
 
-// [수정] 색약 친화적 팔레트 개선 (G와 B 구분 강화)
+// [색약 친화적 팔레트]
 const COLORS: Record<string, string> = {
-  R: 'bg-orange-600', // Vermilion (주황빛 빨강)
-  G: 'bg-emerald-600', // [변경] Teal -> Emerald (더 선명한 초록)
-  B: 'bg-blue-700',    // [변경] Sky -> Blue-700 (더 진한 파랑, 명도 차이 확보)
-  Y: 'bg-yellow-400', // Yellow
+  R: 'bg-orange-600', 
+  G: 'bg-emerald-600',   
+  B: 'bg-blue-700',    
+  Y: 'bg-yellow-400', 
   X: 'bg-neutral-700 border-neutral-600',
 };
 
-// 그래프 노드 색상 (SVG용) - [변경] UI 색상과 동기화
+// 그래프 노드 색상 (SVG용)
 const GRAPH_COLORS: Record<string, string> = {
   R: '#ea580c', // orange-600
-  G: '#059669', // emerald-600 [변경]
-  B: '#1d4ed8', // blue-700 [변경]
+  G: '#059669', // emerald-600
+  B: '#1d4ed8', // blue-700
   Y: '#facc15', // yellow-400
 };
 
 const INPUT_COLORS: Record<string, string> = {
   R: 'bg-orange-600 text-white',
-  G: 'bg-emerald-600 text-white', // [변경]
-  B: 'bg-blue-700 text-white',    // [변경]
+  G: 'bg-emerald-600 text-white',
+  B: 'bg-blue-700 text-white',
   Y: 'bg-yellow-400 text-black', 
   DEFAULT: 'bg-neutral-800 text-neutral-400 border-neutral-600', 
 };
@@ -140,7 +140,6 @@ type Subgraph = Edge[];
 const extractEdges = (puzzleData: string[][]): Edge[] => {
   const edges: Edge[] = [];
   puzzleData.forEach((colors, cubeIdx) => {
-    // Pairs: (0,5), (1,3), (2,4) based on [Top, Left, Front, Right, Back, Bottom]
     const pairs = [[0, 5], [1, 3], [2, 4]];
     pairs.forEach((p, pairIdx) => {
       edges.push({ u: colors[p[0]], v: colors[p[1]], cubeIdx, pairIdx });
@@ -258,7 +257,8 @@ const HintPanel = ({
   };
 
   return (
-    <div className="absolute top-4 right-4 z-50 w-80 bg-neutral-900/90 backdrop-blur-md border border-neutral-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col transition-all">
+    // [수정] 모바일 레이아웃 개선: 상단 고정 + 가로 꽉 참
+    <div className="absolute top-4 left-4 right-4 md:right-4 md:left-auto md:w-80 z-30 bg-neutral-900/90 backdrop-blur-xl border border-neutral-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col transition-all max-h-[60vh] md:max-h-none">
       <div className="flex items-center justify-between p-4 border-b border-neutral-700">
         <h3 className="text-white font-bold flex items-center gap-2">
           <Lightbulb size={20} className="text-yellow-400" />
@@ -269,7 +269,7 @@ const HintPanel = ({
         </button>
       </div>
 
-      <div className="p-4 flex-1 flex flex-col items-center justify-center min-h-[320px]">
+      <div className="p-4 flex-1 flex flex-col items-center justify-center min-h-[200px] overflow-y-auto">
         {!solution ? (
           <div className="text-red-400 text-center">
             <p className="font-bold">No Solution Found!</p>
@@ -281,7 +281,7 @@ const HintPanel = ({
               <div className="w-full">
                 <p className="text-neutral-300 text-sm mb-2 text-center">Step 1: 전체 그래프 생성</p>
                 <p className="text-neutral-500 text-xs mb-4 text-center">각 큐브의 마주 보는 면을 연결합니다.</p>
-                <svg width="100%" height="240" viewBox="0 0 300 300" className="mx-auto bg-neutral-800 rounded-lg">
+                <svg width="100%" height="200" viewBox="0 0 300 300" className="mx-auto bg-neutral-800 rounded-lg">
                   {renderEdges(solution.allEdges, true)}
                   {nodes.map(n => (
                     <circle key={n} cx={nodePos[n as keyof typeof nodePos].x} cy={nodePos[n as keyof typeof nodePos].y} r="18" fill={GRAPH_COLORS[n]} stroke="white" strokeWidth="2" />
@@ -296,7 +296,7 @@ const HintPanel = ({
             {step === 2 && (
               <div className="w-full">
                 <p className="text-neutral-300 text-sm mb-2 text-center">Step 2: 부분 그래프 분해</p>
-                <div className="grid grid-cols-2 gap-2 h-[240px]">
+                <div className="grid grid-cols-2 gap-2 h-[200px]">
                   <div className="bg-neutral-800 rounded-lg p-1 flex flex-col items-center">
                     <span className="text-red-400 text-xs font-bold mb-1">G1 (앞-뒤)</span>
                     <svg width="100%" height="100%" viewBox="0 0 300 300">
@@ -320,12 +320,12 @@ const HintPanel = ({
             )}
 
             {step === 3 && (
-              <div className="text-center space-y-6">
+              <div className="text-center space-y-6 py-4">
                 <p className="text-neutral-300 text-sm">Step 3: 솔루션 적용</p>
-                <div className="bg-neutral-800 p-6 rounded-xl">
-                  <Check className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                <div className="bg-neutral-800 p-4 rounded-xl">
+                  <Check className="w-12 h-12 text-green-500 mx-auto mb-2" />
                   <p className="text-white font-bold">해답을 찾았습니다!</p>
-                  <p className="text-neutral-400 text-xs mt-2">큐브를 자동으로 회전시킵니다.</p>
+                  <p className="text-neutral-400 text-xs mt-1">큐브를 자동으로 회전시킵니다.</p>
                 </div>
                 <button 
                   onClick={() => onApply(solution.g1, solution.g2)}
@@ -369,11 +369,11 @@ const HintPanel = ({
   );
 };
 
-// [추가] PuzzleMapOverlay 컴포넌트
+// --- PuzzleMapOverlay Component ---
 const PuzzleMapOverlay = ({ puzzleData, onClose }: { puzzleData: string[][], onClose: () => void }) => {
   return (
-    <div className="absolute top-4 left-4 z-50 w-64 max-h-[80vh] overflow-y-auto bg-neutral-900/90 backdrop-blur-md border border-neutral-700 rounded-2xl shadow-2xl p-4 flex flex-col gap-6 scrollbar-hide">
-       {/* Header */}
+    // [수정] 모바일 레이아웃 개선: 상단 고정
+    <div className="absolute top-4 left-4 right-4 md:right-auto md:w-64 z-30 max-h-[60vh] overflow-y-auto bg-neutral-900/90 backdrop-blur-xl border border-neutral-700 rounded-2xl shadow-2xl p-4 flex flex-col gap-6 scrollbar-hide">
        <div className="flex items-center justify-between border-b border-neutral-700 pb-2">
         <h3 className="text-white font-bold flex items-center gap-2">
           <MapIcon size={18} className="text-blue-400" />
@@ -384,17 +384,14 @@ const PuzzleMapOverlay = ({ puzzleData, onClose }: { puzzleData: string[][], onC
         </button>
       </div>
 
-      {/* Content */}
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-4">
         {puzzleData.map((faces, idx) => (
           <div key={idx} className="bg-neutral-800/50 p-2 rounded-lg border border-neutral-700/50">
             <div className="text-xs text-neutral-400 mb-2 ml-1 font-mono">Cube {idx + 1}</div>
             <div className="grid grid-cols-4 gap-1 w-max mx-auto transform scale-90 origin-top">
-              {/* Top */}
               <div className="col-start-2">
                 <div className={`w-6 h-6 border border-black/30 rounded-sm ${COLORS[faces[0]]}`} />
               </div>
-              {/* Left, Front, Right, Back */}
               <div className="col-start-1 row-start-2">
                 <div className={`w-6 h-6 border border-black/30 rounded-sm ${COLORS[faces[1]]}`} />
               </div>
@@ -407,7 +404,6 @@ const PuzzleMapOverlay = ({ puzzleData, onClose }: { puzzleData: string[][], onC
               <div className="col-start-4 row-start-2">
                 <div className={`w-6 h-6 border border-black/30 rounded-sm ${COLORS[faces[4]]}`} />
               </div>
-              {/* Bottom */}
               <div className="col-start-2 row-start-3">
                 <div className={`w-6 h-6 border border-black/30 rounded-sm ${COLORS[faces[5]]}`} />
               </div>
@@ -743,7 +739,7 @@ const CustomPuzzleEditor = ({ onStart, onBack }: { onStart: (data: string[][]) =
   };
 
   return (
-    <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-start p-6 overflow-y-auto">
+    <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-start p-6 overflow-y-auto overscroll-none touch-none">
       <div className="w-full max-w-2xl flex items-center justify-between mb-8 mt-4">
         <button onClick={onBack} className="p-2 text-white hover:bg-white/10 rounded-full">
           <ChevronLeft size={32} />
@@ -752,7 +748,7 @@ const CustomPuzzleEditor = ({ onStart, onBack }: { onStart: (data: string[][]) =
         <div className="w-10"></div> 
       </div>
 
-      <div className="flex flex-col gap-8 w-full max-w-2xl">
+      <div className="flex flex-col gap-8 w-full max-w-2xl pb-32">
         {puzzleData.map((cubeFaces, cubeIdx) => (
           <div key={cubeIdx} className="bg-neutral-800 p-4 rounded-xl border border-neutral-700">
             <h3 className="text-white font-bold mb-4 ml-2">Cube {cubeIdx + 1}</h3>
@@ -813,7 +809,7 @@ const CustomPuzzleEditor = ({ onStart, onBack }: { onStart: (data: string[][]) =
 
       <button 
         onClick={handlePlay}
-        className="fixed bottom-8 right-8 bg-green-600 text-white p-4 rounded-full shadow-2xl hover:bg-green-500 transition-all active:scale-95 flex items-center gap-2 font-bold pr-6"
+        className="fixed bottom-8 right-8 bg-green-600 text-white p-4 rounded-full shadow-2xl hover:bg-green-500 transition-all active:scale-95 flex items-center gap-2 font-bold pr-6 z-50"
       >
         <div className="bg-white/20 p-2 rounded-full">
           <Check size={24} />
@@ -827,11 +823,12 @@ const CustomPuzzleEditor = ({ onStart, onBack }: { onStart: (data: string[][]) =
 // --- HomeScreen Component ---
 const HomeScreen = ({ onStart, onCustom }: { onStart: (data: string[][]) => void, onCustom: () => void }) => {
   return (
-    <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center p-6 space-y-12">
+    <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center p-6 space-y-12 touch-none overscroll-none">
       <div className="text-center space-y-2 animate-fade-in-up">
         <h1 className="text-5xl md:text-7xl font-black text-white tracking-widest drop-shadow-2xl" style={{ fontFamily: 'Impact, sans-serif' }}>
           INSTANT<br/>INSANITY
         </h1>
+        <p className="text-neutral-400 text-lg">4개의 큐브, 4개의 면, 하나의 정답</p>
       </div>
 
       <div className="w-full max-w-sm space-y-4">
@@ -899,6 +896,9 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
   const [showHint, setShowHint] = useState(false);
   const [showMap, setShowMap] = useState(false);
 
+  // [수정] 오버레이가 켜져있는지 여부 (3D 뷰 축소용)
+  const isOverlayOpen = showHint || showMap;
+
   const handleRotate = (id: number, newMatrix: number[]) => {
     setCubeMatrices(prev => {
       const next = [...prev];
@@ -914,11 +914,9 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
     setShowMap(false);
   };
 
-  // 솔루션 적용 로직 (그래프 -> 큐브 회전)
   const applySolution = (g1: Subgraph, g2: Subgraph) => {
     const allRotations = getAllRotations();
     
-    // Pair Indices: 0=[Top/Bottom](Y-axis), 1=[Left/Right](X-axis), 2=[Front/Back](Z-axis)
     const getLocalAxisVector = (pairIdx: number) => {
       if (pairIdx === 0) return [0, 1, 0, 0]; // Y
       if (pairIdx === 1) return [1, 0, 0, 0]; // X
@@ -926,70 +924,54 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
       return [0, 0, 0, 0];
     };
 
-    // 1. 각 큐브별로 그래프 조건(축 정렬)을 만족하는 회전 후보군(4개) 찾기
     const cubeCandidates = puzzleData.map((_, cubeIdx) => {
-      const e1 = g1.find(e => e.cubeIdx === cubeIdx); // Front-Back Pair
-      const e2 = g2.find(e => e.cubeIdx === cubeIdx); // Left-Right Pair
+      const e1 = g1.find(e => e.cubeIdx === cubeIdx); 
+      const e2 = g2.find(e => e.cubeIdx === cubeIdx); 
       
       if (!e1 || !e2) return [IDENTITY_MATRIX];
 
-      const axis1 = getLocalAxisVector(e1.pairIdx); // Should align with World Z (Front/Back)
-      const axis2 = getLocalAxisVector(e2.pairIdx); // Should align with World X (Left/Right)
+      const axis1 = getLocalAxisVector(e1.pairIdx); 
+      const axis2 = getLocalAxisVector(e2.pairIdx); 
 
       const candidates: number[][] = [];
 
       for (const m of allRotations) {
-        // M * axis1 -> World Z (+-1 on Z)
         const v1 = applyMatrixToVector(m, axis1);
         const onZ = Math.abs(v1[0]) < 0.1 && Math.abs(v1[1]) < 0.1 && Math.abs(Math.abs(v1[2]) - 1) < 0.1;
-        
-        // M * axis2 -> World X (+-1 on X)
         const v2 = applyMatrixToVector(m, axis2);
         const onX = Math.abs(Math.abs(v2[0]) - 1) < 0.1 && Math.abs(v2[1]) < 0.1 && Math.abs(v2[2]) < 0.1;
 
-        if (onZ && onX) {
-          candidates.push(m);
-        }
+        if (onZ && onX) candidates.push(m);
       }
       return candidates;
     });
 
-    // 2. 조합 탐색 (Backtracking) - 색상 충돌 방지
-    // 각 큐브마다 4개의 후보 회전이 있고, 이 중 Front와 Left 색상이 겹치지 않는 조합을 찾아야 함
     const finalSolution: number[][] = [];
     
     const solveOrientation = (depth: number, usedFront: Record<string, number>, usedLeft: Record<string, number>): boolean => {
-      if (depth === 4) return true; // Found solution for all 4 cubes
+      if (depth === 4) return true;
 
       const candidates = cubeCandidates[depth];
       const currentColors = puzzleData[depth];
 
       for (const m of candidates) {
-        // 현재 회전 매트릭스 m을 적용했을 때의 Front, Left 색상 식별
         let frontColor = '';
         let leftColor = '';
 
-        // Check all 6 faces to find which one lands on Front(+Z) and Left(-X)
         for (let i = 0; i < 6; i++) {
           const worldNormal = applyMatrixToVector(m, INITIAL_NORMALS[i]);
-          
-          // Front is +Z (0,0,1)
           if (worldNormal[2] > 0.9) frontColor = currentColors[i];
-          // Left is -X (-1,0,0)
           if (worldNormal[0] < -0.9) leftColor = currentColors[i];
         }
 
-        // Check constraints (Unique color per column)
         if (usedFront[frontColor] || usedLeft[leftColor]) continue;
 
-        // Apply
         usedFront[frontColor] = 1;
         usedLeft[leftColor] = 1;
         finalSolution[depth] = m;
 
         if (solveOrientation(depth + 1, usedFront, usedLeft)) return true;
 
-        // Backtrack
         usedFront[frontColor] = 0;
         usedLeft[leftColor] = 0;
       }
@@ -997,7 +979,7 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
     };
 
     if (solveOrientation(0, {}, {})) {
-      setCubeMatrices([...finalSolution]); // Copy to trigger update
+      setCubeMatrices([...finalSolution]);
       setTowerRotation(0);
       setShowHint(false);
     } else {
@@ -1006,9 +988,8 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
   };
 
   return (
-    <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center overflow-hidden touch-none">
+    <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center overflow-hidden touch-none overscroll-none">
       
-      {/* 힌트 패널 (Overlay) */}
       {showHint && (
         <HintPanel 
           puzzleData={puzzleData} 
@@ -1017,7 +998,6 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
         />
       )}
 
-      {/* 퍼즐 전개도 맵 (Overlay) - 좌측 상단 */}
       {showMap && (
         <PuzzleMapOverlay
           puzzleData={puzzleData}
@@ -1025,8 +1005,11 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
         />
       )}
 
-      {/* 3D Viewport */}
-      <div className="relative w-64 h-96 perspective-container" style={{ perspective: '1200px' }}>
+      {/* 3D Viewport - [수정] 오버레이가 열리면 스케일을 줄여서 공간 확보 */}
+      <div 
+        className={`relative w-64 h-96 perspective-container transition-transform duration-300 ${isOverlayOpen ? 'scale-75 translate-y-12 md:translate-y-0 md:scale-100' : ''}`} 
+        style={{ perspective: '1200px' }}
+      >
         <div className="w-full h-full relative preserve-3d flex items-center justify-center" style={{ transform: 'rotateX(-20deg) rotateY(-30deg)' }}>
           <div className="w-full h-full relative preserve-3d flex items-center justify-center" 
                style={{ transform: `rotateY(${towerRotation}deg)`, transition: isTowerDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' }}>
@@ -1044,7 +1027,7 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
           <Home size={24} />
         </button>
         
-        {/* Reset Button (Blue) - Size adjusted to match Home/Hint */}
+        {/* Reset Button (Blue) - Size adjusted */}
         <button onClick={handleReset} className="w-14 h-14 bg-blue-600 rounded-full flex items-center justify-center text-white shadow-xl shadow-blue-900/50 active:scale-95 transition-transform border-2 border-blue-500 hover:bg-blue-500">
           <RotateCcw size={24} />
         </button>
