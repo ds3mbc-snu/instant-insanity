@@ -4,7 +4,7 @@ import { RotateCcw, Home, Play, Settings, Grid3X3, ChevronLeft, ChevronRight, Ch
 // ==========================================
 // 1. 상수 및 데이터 정의
 // ==========================================
-const APP_VERSION = "v1.0.7"; // [수정] 버전 업데이트
+const APP_VERSION = "v1.0.7"; 
 const CUBE_SIZE = 100;
 const GAP = 10;
 const DRAG_SENSITIVITY = 0.8; 
@@ -269,7 +269,6 @@ const HintPanel = ({
   };
 
   return (
-    // [수정] bottom-32 추가하여 하단 버튼 위까지만 내려오도록 설정 (h-full 제거)
     <div 
       className={`fixed top-4 right-4 bottom-32 w-[80%] max-w-sm z-30 bg-neutral-900/95 backdrop-blur-xl border border-neutral-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-[120%]'}`}
     >
@@ -385,7 +384,6 @@ const HintPanel = ({
 
 const PuzzleMapOverlay = ({ puzzleData, onClose, isOpen }: { puzzleData: string[][], onClose: () => void, isOpen: boolean }) => {
   return (
-    // [수정] bottom-32 추가하여 하단 버튼 위까지만 내려오도록 설정 (h-full 제거)
     <div 
       className={`fixed top-4 left-4 bottom-32 w-[80%] max-w-sm z-30 bg-neutral-900/95 backdrop-blur-xl border border-neutral-700 rounded-2xl shadow-2xl overflow-y-auto flex flex-col gap-6 scrollbar-hide transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-[120%]'}`}
     >
@@ -926,11 +924,8 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
   const [showHint, setShowHint] = useState(false);
   const [showMap, setShowMap] = useState(false);
 
-  // [추가] 힌트 단계 상태 승격 (State Lifting)
+  // [수정] 힌트 단계 상태 승격 (State Lifting)
   const [hintStep, setHintStep] = useState(1);
-
-  // [수정] 오버레이가 열려도 타워 위치나 스케일을 변경하지 않음 (그대로 유지)
-  const isOverlayOpen = showHint || showMap;
 
   // [수정] document 레벨 스크롤 방지 (Safari 대응)
   useEffect(() => {
@@ -1070,7 +1065,7 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
         isOpen={showMap}
       />
 
-      {/* 3D Viewport - [수정] 오버레이가 열려도 위치 고정 (scale 제거) */}
+      {/* 3D Viewport - [수정] 오버레이가 열려도 위치 고정 */}
       <div 
         className="relative w-64 h-96 perspective-container transition-transform duration-300" 
         style={{ perspective: '1200px' }}
