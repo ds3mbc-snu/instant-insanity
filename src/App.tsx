@@ -1,10 +1,10 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { RotateCcw, Home, Play, Settings, Grid3X3, ChevronLeft, ChevronRight, Check, Lightbulb, X as XIcon, Map as MapIcon } from 'lucide-react';
 
 // ==========================================
 // 1. 상수 및 데이터 정의
 // ==========================================
-const APP_VERSION = "v1.0.4"; // [수정] 버전 업데이트
+const APP_VERSION = "v1.0.5"; // [수정] 버전 업데이트
 const CUBE_SIZE = 100;
 const GAP = 10;
 const DRAG_SENSITIVITY = 0.8; 
@@ -424,29 +424,35 @@ const PuzzleMapOverlay = ({ puzzleData, onClose }: { puzzleData: string[][], onC
 // ==========================================
 
 const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
-  const [startPos, setStartPos] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
+  // [수정] useRef 사용으로 성능 및 반응성 개선
+  const startX = useRef(0);
+  const isDragging = useRef(false);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault(); e.stopPropagation();
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
-    setIsDragging(true);
-    setStartPos({ x: e.clientX, y: e.clientY });
+    
+    isDragging.current = true;
+    startX.current = e.clientX;
     onRotateStart();
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDragging) return;
+    if (!isDragging.current) return;
     e.preventDefault();
-    const diffX = e.clientX - startPos.x;
+    
+    const diffX = e.clientX - startX.current;
+    if (diffX === 0) return;
+
     onRotate(diffX * DRAG_SENSITIVITY);
-    setStartPos({ x: e.clientX, y: e.clientY });
+    startX.current = e.clientX; // 기준점 갱신
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    if (!isDragging) return;
+    if (!isDragging.current) return;
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
-    setIsDragging(false);
+    
+    isDragging.current = false;
     onRotateEnd();
   };
 
@@ -462,7 +468,7 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
         transform: `translateY(${platformY}px) rotateX(90deg)`,
         width: '320px',
         height: '320px',
-        cursor: isDragging ? 'grabbing' : 'grab',
+        cursor: 'grab', // 드래그 중인 커서는 전역적으로 제어하거나 단순화
         touchAction: 'none',
       }}
       onPointerDown={handlePointerDown}
@@ -470,11 +476,11 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
     >
-      <div className="absolute w-full h-full rounded-full bg-neutral-700 border-4 border-neutral-600 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] flex items-center justify-center">
-         <div className="w-2/3 h-2/3 rounded-full border-2 border-neutral-600/50 border-dashed pointer-events-none" />
+      <div className="absolute w-full h-full rounded-full bg-neutral-700 border-4 border-neutral-600 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] flex items-center justify-center pointer-events-none">
+         <div className="w-2/3 h-2/3 rounded-full border-2 border-neutral-600/50 border-dashed" />
       </div>
-      <div className="absolute w-full h-full rounded-full bg-neutral-800 translate-z-[-10px]" />
-      <div className="absolute w-full h-full rounded-full bg-neutral-800 translate-z-[-20px] shadow-xl" />
+      <div className="absolute w-full h-full rounded-full bg-neutral-800 translate-z-[-10px] pointer-events-none" />
+      <div className="absolute w-full h-full rounded-full bg-neutral-800 translate-z-[-20px] shadow-xl pointer-events-none" />
       <div className="absolute text-white/20 font-bold text-4xl select-none animate-pulse pointer-events-none">⟲ ⟳</div>
     </div>
   );
@@ -493,27 +499,29 @@ const Cube = ({
   towerRotation: number;
   onRotate: (id: number, newMatrix: number[]) => void;
 }) => {
-  const [startPos, setStartPos] = useState({ x: 0, y: 0 });
+  // [수정] 드래그 추적을 useRef로 변경
+  const startPos = useRef({ x: 0, y: 0 });
   const [currentDragAngle, setCurrentDragAngle] = useState<{ axis: 'x' | 'y' | 'z', val: number } | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
+  const [isDragging, setIsDragging] = useState(false); // UI 상태용
   
-  const [activeAxis, setActiveAxis] = useState<'x' | 'y' | 'z' | null>(null);
-  const [rotationSign, setRotationSign] = useState(1);
-  const [touchedFaceIndex, setTouchedFaceIndex] = useState<number | null>(null);
+  const activeAxis = useRef<'x' | 'y' | 'z' | null>(null);
+  const rotationSign = useRef(1);
+  const touchedFaceIndex = useRef<number | null>(null);
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    e.preventDefault(); 
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
     
     const target = e.target as HTMLElement;
     const faceEl = target.closest('[data-face-index]');
     const faceIndex = faceEl ? parseInt(faceEl.getAttribute('data-face-index') || '0', 10) : 0;
-    setTouchedFaceIndex(faceIndex);
-
+    
+    touchedFaceIndex.current = faceIndex;
+    startPos.current = { x: e.clientX, y: e.clientY };
+    activeAxis.current = null;
+    rotationSign.current = 1;
+    
     setIsDragging(true);
-    setStartPos({ x: e.clientX, y: e.clientY });
-    setActiveAxis(null);
     setCurrentDragAngle(null);
   };
 
@@ -521,13 +529,13 @@ const Cube = ({
     if (!isDragging) return;
     e.preventDefault();
 
-    const diffX = e.clientX - startPos.x;
-    const diffY = e.clientY - startPos.y;
+    const diffX = e.clientX - startPos.current.x;
+    const diffY = e.clientY - startPos.current.y;
 
-    if (!activeAxis) {
+    if (!activeAxis.current) {
       if (Math.abs(diffX) < 5 && Math.abs(diffY) < 5) return;
 
-      const initialNormal = INITIAL_NORMALS[touchedFaceIndex || 0];
+      const initialNormal = INITIAL_NORMALS[touchedFaceIndex.current || 0];
       const towerRotMatrix = getRotationMatrix('y', towerRotation);
       const cubeWorldMatrix = multiplyMatrix(towerRotMatrix, matrix);
       const worldNormal = applyMatrixToVector(cubeWorldMatrix, initialNormal);
@@ -605,16 +613,16 @@ const Cube = ({
         mappingSign = lz >= 0 ? 1 : -1;
       }
 
-      setActiveAxis(finalAxis);
-      setRotationSign(worldSign * mappingSign * (shouldUseHorizontalDrag ? 1 : 1));
+      activeAxis.current = finalAxis;
+      rotationSign.current = worldSign * mappingSign * (shouldUseHorizontalDrag ? 1 : 1);
       return;
     }
 
     const isHorz = Math.abs(diffX) > Math.abs(diffY);
     let val = isHorz ? diffX : diffY;
-    const delta = val * DRAG_SENSITIVITY * rotationSign;
+    const delta = val * DRAG_SENSITIVITY * rotationSign.current;
 
-    setCurrentDragAngle({ axis: activeAxis, val: delta });
+    setCurrentDragAngle({ axis: activeAxis.current, val: delta });
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
@@ -623,16 +631,16 @@ const Cube = ({
     
     setIsDragging(false);
     
-    if (currentDragAngle) {
+    if (currentDragAngle && activeAxis.current) {
       const snapAngle = Math.round(currentDragAngle.val / 90) * 90;
       if (snapAngle !== 0) {
-        const rotMat = getRotationMatrix(currentDragAngle.axis, snapAngle);
+        const rotMat = getRotationMatrix(activeAxis.current, snapAngle);
         const newMatrix = multiplyMatrix(rotMat, matrix);
         onRotate(id, newMatrix);
       }
     }
 
-    setActiveAxis(null);
+    activeAxis.current = null;
     setCurrentDragAngle(null);
   };
 
@@ -909,7 +917,6 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
   const [showHint, setShowHint] = useState(false);
   const [showMap, setShowMap] = useState(false);
 
-  // [수정] 오버레이가 열리면 타워를 더 아래로 내림
   const isOverlayOpen = showHint || showMap;
 
   // [수정] document 레벨 스크롤 방지 (Safari 대응)
