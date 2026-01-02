@@ -4,7 +4,7 @@ import { RotateCcw, Home, Play, Settings, Grid3X3, ChevronLeft, ChevronRight, Ch
 // ==========================================
 // 1. 상수 및 데이터 정의
 // ==========================================
-const APP_VERSION = "v1.0.1";
+const APP_VERSION = "v1.0.2"; // [수정] 버전 업데이트
 const CUBE_SIZE = 100;
 const GAP = 10;
 const DRAG_SENSITIVITY = 0.8; 
@@ -73,7 +73,6 @@ const PRESET_PUZZLES = {
 type Edge = { u: string, v: string, cubeIdx: number, pairIdx: number };
 type Subgraph = Edge[];
 
-// [수정] PlatformProps 인터페이스를 상단으로 이동하여 명확하게 정의
 interface PlatformProps {
   onRotateStart: () => void;
   onRotate: (delta: number) => void;
@@ -420,41 +419,6 @@ const PuzzleMapOverlay = ({ puzzleData, onClose }: { puzzleData: string[][], onC
   )
 }
 
-const CubeFace = ({ index, color, transform }: { index: number, color: string; transform: string }) => {
-  return (
-    <div
-      data-face-index={index}
-      className={`absolute w-full h-full border-[3px] border-black flex items-center justify-center box-border touch-none ${COLORS[color]}`}
-      style={{ 
-        transform, 
-        backfaceVisibility: 'hidden', 
-        WebkitBackfaceVisibility: 'hidden',
-        outline: '2px solid black'
-      }}
-    >
-      <div className="w-full h-full bg-gradient-to-br from-white/30 to-black/10 pointer-events-none absolute inset-0" />
-    </div>
-  );
-};
-
-const FaceInput = ({ value, onChange, label, onPaste }: { value: string, onChange: (v: string) => void, label: string, onPaste?: (e: React.ClipboardEvent<HTMLInputElement>) => void }) => {
-  const style = INPUT_COLORS[value] || INPUT_COLORS.DEFAULT;
-  
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onPaste={onPaste}
-        maxLength={1}
-        className={`w-12 h-12 text-center text-xl font-bold uppercase rounded-md border-2 focus:outline-none focus:border-white transition-colors ${style}`}
-      />
-      <span className="text-[10px] text-neutral-500 uppercase">{label}</span>
-    </div>
-  );
-};
-
 // ==========================================
 // 5. 메인 컴포넌트 (Components)
 // ==========================================
@@ -464,7 +428,9 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
   const [isDragging, setIsDragging] = useState(false);
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    e.preventDefault(); e.stopPropagation();
+    // [수정] 모바일 사파리 스크롤 방지
+    e.preventDefault(); 
+    e.stopPropagation();
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
     setIsDragging(true);
     setStartPos({ x: e.clientX, y: e.clientY });
@@ -473,7 +439,7 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!isDragging) return;
-    e.preventDefault();
+    e.preventDefault(); // [수정] 터치 무브 이벤트 시 스크롤 방지
     const diffX = e.clientX - startPos.x;
     onRotate(diffX * DRAG_SENSITIVITY);
     setStartPos({ x: e.clientX, y: e.clientY });
@@ -499,7 +465,7 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
         width: '320px',
         height: '320px',
         cursor: isDragging ? 'grabbing' : 'grab',
-        touchAction: 'none',
+        touchAction: 'none', // [수정] 중요
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -538,7 +504,9 @@ const Cube = ({
   const [touchedFaceIndex, setTouchedFaceIndex] = useState<number | null>(null);
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    e.preventDefault(); e.stopPropagation();
+    // [수정] 모바일 사파리 대응: preventDefault 필수
+    e.preventDefault(); 
+    e.stopPropagation();
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
     
     const target = e.target as HTMLElement;
@@ -706,6 +674,44 @@ const Cube = ({
   );
 };
 
+const CubeFace = ({ index, color, transform }: { index: number, color: string; transform: string }) => {
+  return (
+    <div
+      data-face-index={index}
+      // [수정] touch-none 클래스 추가 (중요)
+      className={`absolute w-full h-full border-[3px] border-black flex items-center justify-center box-border touch-none ${COLORS[color]}`}
+      style={{ 
+        transform, 
+        backfaceVisibility: 'hidden', 
+        WebkitBackfaceVisibility: 'hidden',
+        outline: '2px solid black'
+      }}
+    >
+      <div className="w-full h-full bg-gradient-to-br from-white/30 to-black/10 pointer-events-none absolute inset-0" />
+    </div>
+  );
+};
+
+// --- FaceInput for Editor ---
+const FaceInput = ({ value, onChange, label, onPaste }: { value: string, onChange: (v: string) => void, label: string, onPaste?: (e: React.ClipboardEvent<HTMLInputElement>) => void }) => {
+  const style = INPUT_COLORS[value] || INPUT_COLORS.DEFAULT;
+  
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onPaste={onPaste}
+        maxLength={1}
+        className={`w-12 h-12 text-center text-xl font-bold uppercase rounded-md border-2 focus:outline-none focus:border-white transition-colors ${style}`}
+      />
+      <span className="text-[10px] text-neutral-500 uppercase">{label}</span>
+    </div>
+  );
+};
+
+// --- CustomPuzzleEditor Component ---
 const CustomPuzzleEditor = ({ onStart, onBack }: { onStart: (data: string[][]) => void, onBack: () => void }) => {
   const [puzzleData, setPuzzleData] = useState<string[][]>(
     PRESET_PUZZLES.custom.map(row => [...row])
@@ -821,9 +827,14 @@ const CustomPuzzleEditor = ({ onStart, onBack }: { onStart: (data: string[][]) =
   );
 };
 
+// --- HomeScreen Component ---
 const HomeScreen = ({ onStart, onCustom }: { onStart: (data: string[][]) => void, onCustom: () => void }) => {
   return (
     <div className="fixed inset-0 h-[100dvh] w-full bg-neutral-900 overflow-hidden touch-none overscroll-none flex flex-col items-center justify-center p-6 space-y-12">
+      <div className="absolute top-2 left-2 text-xs text-neutral-600 font-mono z-10 select-none">
+        {APP_VERSION}
+      </div>
+
       <div className="text-center space-y-2 animate-fade-in-up">
         <h1 className="text-5xl md:text-7xl font-black text-white tracking-widest drop-shadow-2xl" style={{ fontFamily: 'Impact, sans-serif' }}>
           INSTANT<br/>INSANITY
@@ -884,6 +895,7 @@ const HomeScreen = ({ onStart, onCustom }: { onStart: (data: string[][]) => void
   );
 };
 
+// --- GameScreen Component ---
 const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: () => void }) => {
   const [cubeMatrices, setCubeMatrices] = useState<number[][]>(
     puzzleData.map(() => [...IDENTITY_MATRIX])
@@ -988,6 +1000,21 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
   return (
     <div className="fixed inset-0 h-[100dvh] w-full bg-neutral-900 overflow-hidden touch-none overscroll-none flex flex-col items-center justify-center">
       
+      {/* [수정] 글로벌 스타일 주입 - 사파리 스크롤 방지 */}
+      <style>{`
+        html, body, #root {
+          width: 100%;
+          height: 100%;
+          margin: 0;
+          padding: 0;
+          overflow: hidden;
+          touch-action: none;
+          -webkit-user-select: none;
+          user-select: none;
+          -webkit-touch-callout: none;
+        }
+      `}</style>
+
       <div className="absolute top-2 left-2 text-xs text-neutral-600 font-mono z-10 select-none">
         {APP_VERSION}
       </div>
@@ -1029,6 +1056,7 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
           <Home size={24} />
         </button>
         
+        {/* Reset Button (Blue) - Size adjusted */}
         <button onClick={handleReset} className="w-14 h-14 bg-blue-600 rounded-full flex items-center justify-center text-white shadow-xl shadow-blue-900/50 active:scale-95 transition-transform border-2 border-blue-500 hover:bg-blue-500">
           <RotateCcw size={24} />
         </button>
