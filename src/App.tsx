@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { RotateCcw, Home, Play, Settings, Grid3X3, ChevronLeft, ChevronRight, Check, Lightbulb, X as XIcon, Map as MapIcon } from 'lucide-react';
+import { RotateCcw, Home, Play, Settings, Grid3X3, ChevronLeft, ChevronRight, Check, Lightbulb, X as XIcon, Map as MapIcon, Share2, Clipboard, ArrowDownToLine } from 'lucide-react';
 
 // ==========================================
 // 1. 상수 및 데이터 정의
 // ==========================================
-const APP_VERSION = "v1.0.7"; 
+const APP_VERSION = "v1.0.8"; // 버전 유지
 const CUBE_SIZE = 100;
 const GAP = 10;
 const DRAG_SENSITIVITY = 0.8; 
@@ -31,6 +31,10 @@ const INPUT_COLORS: Record<string, string> = {
   Y: 'bg-yellow-400 text-black', 
   DEFAULT: 'bg-neutral-800 text-neutral-400 border-neutral-600', 
 };
+
+// [Hex Code Logic] R:00, G:01, B:10, Y:11
+const COLOR_TO_BIT: Record<string, number> = { 'R': 0, 'G': 1, 'B': 2, 'Y': 3, 'X': 0 };
+const BIT_TO_COLOR = ['R', 'G', 'B', 'Y'];
 
 const PUZZLE_1 = [
   ['B', 'R', 'Y', 'G', 'B', 'R'], 
@@ -83,6 +87,49 @@ interface PlatformProps {
 // 3. 유틸리티 함수 (Math & Logic)
 // ==========================================
 const IDENTITY_MATRIX = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+
+// [추가] 시드 생성 (Encode): 4x6 배열 -> 12자리 Hex
+const generateSeed = (data: string[][]): string => {
+  let seed = "";
+  for (const cube of data) {
+    let val = 0;
+    // 6면을 순회하며 비트 압축 (각 면당 2비트)
+    // 순서: Top(0) -> ... -> Bottom(5)
+    // val = (c0<<10) | (c1<<8) ...
+    for (let i = 0; i < 6; i++) {
+      const colorChar = cube[i] || 'R'; // 빈값은 R(00)로 처리
+      const bit = COLOR_TO_BIT[colorChar] || 0;
+      val = (val << 2) | bit;
+    }
+    // 12비트 -> 3자리 Hex (000 ~ FFF)
+    seed += val.toString(16).toUpperCase().padStart(3, '0');
+  }
+  return seed;
+};
+
+// [추가] 시드 파싱 (Decode): 12자리 Hex -> 4x6 배열
+const parseSeed = (seed: string): string[][] | null => {
+  const cleanSeed = seed.replace(/[^0-9A-F]/gi, '').toUpperCase();
+  if (cleanSeed.length !== 12) return null;
+
+  const result: string[][] = [];
+  try {
+    for (let i = 0; i < 4; i++) {
+      const chunk = cleanSeed.slice(i * 3, (i + 1) * 3);
+      const val = parseInt(chunk, 16);
+      const faces: string[] = [];
+      // 12비트를 2비트씩 쪼개서 색상 복원 (상위 비트부터)
+      for (let j = 5; j >= 0; j--) {
+        const bit = (val >> (j * 2)) & 3; // 11(binary) masking
+        faces.push(BIT_TO_COLOR[bit]);
+      }
+      result.push(faces);
+    }
+    return result;
+  } catch (e) {
+    return null;
+  }
+};
 
 const multiplyMatrix = (a: number[], b: number[]) => {
   const out = new Array(16).fill(0);
@@ -471,6 +518,9 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
   return (
     <div
       className="absolute flex items-center justify-center touch-none"
+      // [수정] zIndex를 5로 설정하여 큐브보다 아래에 있지만 터치는 가능하도록 (큐브는 기본 zIndex + @)
+      // 단, GameScreen에서 큐브 zIndex를 동적으로 조정하므로 여기선 기본값만 줌.
+      // 중요한 건 DOM 순서상 Platform이 Cube보다 앞에 와야(코드 상단) 뒤에 깔림.
       style={{
         transformStyle: 'preserve-3d',
         transform: `translateY(${platformY}px) rotateX(90deg)`,
@@ -478,6 +528,7 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
         height: '320px',
         cursor: 'grab', 
         touchAction: 'none',
+        zIndex: 0, 
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -499,13 +550,15 @@ const Cube = ({
   colors, 
   matrix, 
   towerRotation,
-  onRotate 
+  onRotate,
+  baseZIndex // [추가] zIndex prop
 }: { 
   id: number; 
   colors: string[]; 
   matrix: number[]; 
   towerRotation: number;
   onRotate: (id: number, newMatrix: number[]) => void;
+  baseZIndex: number; // [추가]
 }) => {
   const startPos = useRef({ x: 0, y: 0 });
   const [currentDragAngle, setCurrentDragAngle] = useState<{ axis: 'x' | 'y' | 'z', val: number } | null>(null);
@@ -668,7 +721,7 @@ const Cube = ({
         transformStyle: 'preserve-3d',
         transform: `translateY(${(id - 1.5) * (CUBE_SIZE + GAP)}px) matrix3d(${displayMatrix.join(',')})`,
         transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
-        zIndex: isDragging ? 100 : 10,
+        zIndex: isDragging ? 100 : baseZIndex, // [수정] 드래그시 100, 아니면 baseZIndex
       }}
     >
       <CubeFace index={0} color={colors[0]} transform={`rotateX(90deg) translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} />
@@ -735,12 +788,15 @@ const CustomPuzzleEditor = ({ onStart, onBack }: { onStart: (data: string[][]) =
     PRESET_PUZZLES.custom.map(row => [...row])
   );
 
+  const [seedInput, setSeedInput] = useState(""); 
+
   const handleInputChange = (cubeIndex: number, faceIndex: number, val: string) => {
     const char = val.slice(-1).toUpperCase(); 
     const newData = [...puzzleData];
     newData[cubeIndex] = [...newData[cubeIndex]];
     newData[cubeIndex][faceIndex] = char;
     setPuzzleData(newData);
+    setSeedInput(generateSeed(newData)); 
   };
 
   const handlePaste = (cubeIndex: number, e: React.ClipboardEvent<HTMLInputElement>) => {
@@ -751,7 +807,24 @@ const CustomPuzzleEditor = ({ onStart, onBack }: { onStart: (data: string[][]) =
       const newData = [...puzzleData];
       newData[cubeIndex] = pastedText.split(''); 
       setPuzzleData(newData);
+      setSeedInput(generateSeed(newData));
     }
+  };
+
+  const handleLoadSeed = () => {
+    const parsed = parseSeed(seedInput);
+    if (parsed) {
+      setPuzzleData(parsed);
+    } else {
+      alert("올바르지 않은 시드 코드입니다.");
+    }
+  };
+
+  const handleCopySeed = () => {
+    const seed = generateSeed(puzzleData);
+    navigator.clipboard.writeText(seed).then(() => {
+      alert("시드가 클립보드에 복사되었습니다: " + seed);
+    });
   };
 
   const handlePlay = () => {
@@ -769,6 +842,24 @@ const CustomPuzzleEditor = ({ onStart, onBack }: { onStart: (data: string[][]) =
         </button>
         <h2 className="text-2xl font-bold text-white">Custom Puzzle Editor</h2>
         <div className="w-10"></div> 
+      </div>
+
+      <div className="w-full max-w-2xl mx-auto px-6 mb-4 flex gap-2">
+        <div className="relative flex-1">
+          <input 
+            type="text" 
+            value={seedInput}
+            onChange={(e) => setSeedInput(e.target.value)}
+            placeholder="Puzzle Seed Code..."
+            className="w-full bg-neutral-800 text-white p-3 rounded-lg border border-neutral-700 font-mono text-sm focus:outline-none focus:border-blue-500"
+          />
+        </div>
+        <button onClick={handleLoadSeed} className="bg-blue-600 text-white px-4 rounded-lg font-bold hover:bg-blue-500 flex items-center gap-1">
+          <ArrowDownToLine size={18} /> Load
+        </button>
+        <button onClick={handleCopySeed} className="bg-neutral-700 text-white px-4 rounded-lg font-bold hover:bg-neutral-600 flex items-center gap-1">
+          <Clipboard size={18} /> Copy
+        </button>
       </div>
 
       <div className="flex-1 w-full overflow-y-auto p-6 pb-32">
@@ -923,9 +1014,8 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
   
   const [showHint, setShowHint] = useState(false);
   const [showMap, setShowMap] = useState(false);
-
-  // [수정] 힌트 단계 상태 승격 (State Lifting)
   const [hintStep, setHintStep] = useState(1);
+  const [toastMsg, setToastMsg] = useState<string | null>(null); 
 
   // [수정] document 레벨 스크롤 방지 (Safari 대응)
   useEffect(() => {
@@ -953,6 +1043,14 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
     setShowHint(false);
     setShowMap(false);
     setHintStep(1); 
+  };
+
+  const handleShare = () => {
+    const seed = generateSeed(puzzleData);
+    navigator.clipboard.writeText(seed).then(() => {
+      setToastMsg(`Seed Copied: ${seed}`);
+      setTimeout(() => setToastMsg(null), 2000);
+    });
   };
 
   const applySolution = (g1: Subgraph, g2: Subgraph) => {
@@ -1031,7 +1129,6 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
   return (
     <div className="fixed inset-0 h-[100dvh] w-full bg-neutral-900 overflow-hidden touch-none overscroll-none flex flex-col items-center justify-center">
       
-      {/* [수정] 글로벌 스타일 주입 - 사파리 스크롤 방지 */}
       <style>{`
         html, body, #root {
           width: 100%;
@@ -1050,6 +1147,12 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
         {APP_VERSION}
       </div>
 
+      {toastMsg && (
+        <div className="absolute top-12 left-1/2 -translate-x-1/2 bg-neutral-800/90 text-white px-4 py-2 rounded-full shadow-lg z-50 text-sm animate-fade-in-up">
+          {toastMsg}
+        </div>
+      )}
+
       <HintPanel 
         puzzleData={puzzleData} 
         onClose={() => setShowHint(false)} 
@@ -1065,7 +1168,6 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
         isOpen={showMap}
       />
 
-      {/* 3D Viewport - [수정] 오버레이가 열려도 위치 고정 */}
       <div 
         className="relative w-64 h-96 perspective-container transition-transform duration-300" 
         style={{ perspective: '1200px' }}
@@ -1073,16 +1175,27 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
         <div className="w-full h-full relative preserve-3d flex items-center justify-center" style={{ transform: 'rotateX(-20deg) rotateY(-30deg)' }}>
           <div className="w-full h-full relative preserve-3d flex items-center justify-center" 
                style={{ transform: `rotateY(${towerRotation}deg)`, transition: isTowerDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' }}>
-            {puzzleData.map((colors, idx) => (
-              <Cube key={idx} id={idx} colors={colors} matrix={cubeMatrices[idx]} towerRotation={towerRotation} onRotate={handleRotate} />
-            ))}
+            
+            {/* [수정] Platform 먼저 렌더링 (zIndex 하위) */}
             <Platform onRotateStart={() => setIsTowerDragging(true)} onRotate={(delta) => setTowerRotation(prev => prev + delta)} onRotateEnd={() => { setIsTowerDragging(false); setTowerRotation(prev => Math.round(prev / 90) * 90); }} />
+
+            {puzzleData.map((colors, idx) => (
+              <Cube 
+                key={idx} 
+                id={idx} 
+                colors={colors} 
+                matrix={cubeMatrices[idx]} 
+                towerRotation={towerRotation} 
+                onRotate={handleRotate} 
+                // [수정] 윗쪽 큐브가 더 높은 zIndex를 가져 터치 우선순위 확보
+                baseZIndex={(puzzleData.length - idx) * 10}
+              />
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Controls */}
-      <div className="absolute bottom-12 flex items-center gap-6 z-20">
+      <div className="absolute bottom-12 flex items-center gap-4 z-20">
         <button onClick={onHome} className="w-14 h-14 bg-neutral-700 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform border-2 border-neutral-600 hover:bg-neutral-600">
           <Home size={24} />
         </button>
@@ -1097,6 +1210,10 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
 
         <button onClick={() => { setShowHint(!showHint); if (!showHint) setShowMap(false); }} className="w-14 h-14 bg-yellow-500 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform border-2 border-yellow-400 hover:bg-yellow-400 text-black">
           <Lightbulb size={24} fill="currentColor" />
+        </button>
+
+        <button onClick={handleShare} className="w-14 h-14 bg-emerald-600 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform border-2 border-emerald-500 hover:bg-emerald-500">
+          <Share2 size={24} />
         </button>
       </div>
 
