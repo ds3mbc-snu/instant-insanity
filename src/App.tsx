@@ -4,7 +4,7 @@ import { RotateCcw, Home, Play, Settings, Grid3X3, ChevronLeft, ChevronRight, Ch
 // ==========================================
 // 1. 상수 및 데이터 정의
 // ==========================================
-const APP_VERSION = "v1.0.8"; // 버전 유지
+const APP_VERSION = "v1.0.9"; // [수정] 버전 업데이트
 const CUBE_SIZE = 100;
 const GAP = 10;
 const DRAG_SENSITIVITY = 0.8; 
@@ -275,8 +275,15 @@ const HintPanel = ({
 
   const renderEdges = (edges: Edge[], highlight: boolean = false, type: 'g1'|'g2'|'none' = 'none') => {
     return edges.map((e, i) => {
-      const p1 = nodePos[e.u as keyof typeof nodePos];
-      const p2 = nodePos[e.v as keyof typeof nodePos];
+      // [수정] 노드 순서를 정렬하여 커브 방향 일관성 확보 (겹침 방지)
+      let u = e.u;
+      let v = e.v;
+      if (nodes.indexOf(u) > nodes.indexOf(v)) {
+        [u, v] = [v, u];
+      }
+
+      const p1 = nodePos[u as keyof typeof nodePos];
+      const p2 = nodePos[v as keyof typeof nodePos];
       if(!p1 || !p2) return null;
 
       const isLoop = e.u === e.v;
@@ -287,17 +294,15 @@ const HintPanel = ({
       let labelY = 0;
 
       if (isLoop) {
-        // [수정] Self Loop: 바깥쪽으로 그려지도록 방향 동적 계산
+        // Self Loop: 바깥쪽으로 그려지도록 방향 동적 계산
         let dirX = 0;
         let dirY = 0;
-        // 캔버스 중앙(150,150)을 기준으로 노드가 위치한 사분면의 바깥쪽 방향 벡터
         if (p1.x < 150) dirX = -1; else dirX = 1;
         if (p1.y < 150) dirY = -1; else dirY = 1;
 
-        const loopSize = 50 + Math.abs(offset * 0.5); // Loop 크기 조절
-        const twist = (e.cubeIdx % 2 ? 15 : -15); // 겹침 방지 비틀기
+        const loopSize = 50 + Math.abs(offset * 0.5); 
+        const twist = (e.cubeIdx % 2 ? 15 : -15); 
 
-        // Cubic Bezier Control Points
         const c1x = p1.x + dirX * loopSize * 0.5 + twist;
         const c1y = p1.y + dirY * loopSize;
         const c2x = p1.x + dirX * loopSize;
@@ -305,34 +310,25 @@ const HintPanel = ({
 
         pathD = `M ${p1.x} ${p1.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${p1.x} ${p1.y}`;
         
-        // 라벨 위치: Cubic Bezier t=0.5 지점 (정점)
-        // B(t) = (1-t)^3 P0 + 3(1-t)^2 t P1 + 3(1-t) t^2 P2 + t^3 P3
-        // t=0.5 => 0.125(P0+P3) + 0.375(P1+P2)
-        // P0=P3=p1
         labelX = 0.25 * p1.x + 0.375 * (c1x + c2x);
         labelY = 0.25 * p1.y + 0.375 * (c1y + c2y);
 
       } else {
-        // [수정] Quadratic Bezier: 법선 벡터를 이용한 정확한 곡선 제어
+        // Quadratic Bezier: 법선 벡터를 이용한 정확한 곡선 제어
         const mx = (p1.x + p2.x) / 2;
         const my = (p1.y + p2.y) / 2;
         const dx = p2.x - p1.x;
         const dy = p2.y - p1.y;
         
-        // Normal Vector (직교 벡터)
         const dist = Math.sqrt(dx*dx + dy*dy);
         const nx = -dy / dist;
         const ny = dx / dist;
 
-        // Control Point
         const cpX = mx + nx * offset * 1.2; 
         const cpY = my + ny * offset * 1.2;
 
         pathD = `M ${p1.x} ${p1.y} Q ${cpX} ${cpY} ${p2.x} ${p2.y}`;
 
-        // 라벨 위치: Quadratic Bezier t=0.5 지점
-        // B(t) = (1-t)^2 P0 + 2(1-t)t P1 + t^2 P2
-        // t=0.5 => 0.25(P0+P2) + 0.5 P1
         labelX = 0.25 * (p1.x + p2.x) + 0.5 * cpX;
         labelY = 0.25 * (p1.y + p2.y) + 0.5 * cpY;
       }
@@ -345,7 +341,6 @@ const HintPanel = ({
         <g key={i}>
           <path d={pathD} stroke={strokeColor} strokeWidth={strokeWidth} fill="none" opacity={opacity} />
           {!isLoop && highlight && (
-            // [수정] 라벨에 배경 원 추가하여 가독성 확보 및 위치 정확도 개선
              <g>
                <circle cx={labelX} cy={labelY} r="9" fill={strokeColor} />
                <text x={labelX} y={labelY} dy="4" fill="white" fontSize="12" fontWeight="bold" textAnchor="middle">
