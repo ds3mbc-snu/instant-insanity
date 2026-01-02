@@ -280,22 +280,61 @@ const HintPanel = ({
       if(!p1 || !p2) return null;
 
       const isLoop = e.u === e.v;
-      const offset = (e.cubeIdx - 1.5) * 40;
+      const offset = (e.cubeIdx - 1.5) * 40; // Curve magnitude
       
       let pathD = '';
+      let labelX = 0;
+      let labelY = 0;
+
       if (isLoop) {
-        pathD = `M ${p1.x} ${p1.y} C ${p1.x-50-offset} ${p1.y-50}, ${p1.x+50+offset} ${p1.y-50}, ${p1.x} ${p1.y}`;
+        // [수정] Self Loop: 바깥쪽으로 그려지도록 방향 동적 계산
+        let dirX = 0;
+        let dirY = 0;
+        // 캔버스 중앙(150,150)을 기준으로 노드가 위치한 사분면의 바깥쪽 방향 벡터
+        if (p1.x < 150) dirX = -1; else dirX = 1;
+        if (p1.y < 150) dirY = -1; else dirY = 1;
+
+        const loopSize = 50 + Math.abs(offset * 0.5); // Loop 크기 조절
+        const twist = (e.cubeIdx % 2 ? 15 : -15); // 겹침 방지 비틀기
+
+        // Cubic Bezier Control Points
+        const c1x = p1.x + dirX * loopSize * 0.5 + twist;
+        const c1y = p1.y + dirY * loopSize;
+        const c2x = p1.x + dirX * loopSize;
+        const c2y = p1.y + dirY * loopSize * 0.5 - twist;
+
+        pathD = `M ${p1.x} ${p1.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${p1.x} ${p1.y}`;
+        
+        // 라벨 위치: Cubic Bezier t=0.5 지점 (정점)
+        // B(t) = (1-t)^3 P0 + 3(1-t)^2 t P1 + 3(1-t) t^2 P2 + t^3 P3
+        // t=0.5 => 0.125(P0+P3) + 0.375(P1+P2)
+        // P0=P3=p1
+        labelX = 0.25 * p1.x + 0.375 * (c1x + c2x);
+        labelY = 0.25 * p1.y + 0.375 * (c1y + c2y);
+
       } else {
+        // [수정] Quadratic Bezier: 법선 벡터를 이용한 정확한 곡선 제어
         const mx = (p1.x + p2.x) / 2;
         const my = (p1.y + p2.y) / 2;
         const dx = p2.x - p1.x;
         const dy = p2.y - p1.y;
-        const normX = -dy;
-        const normY = dx;
-        const len = Math.sqrt(normX*normX + normY*normY);
-        const cpX = mx + (normX/len) * offset;
-        const cpY = my + (normY/len) * offset;
+        
+        // Normal Vector (직교 벡터)
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        const nx = -dy / dist;
+        const ny = dx / dist;
+
+        // Control Point
+        const cpX = mx + nx * offset * 1.2; 
+        const cpY = my + ny * offset * 1.2;
+
         pathD = `M ${p1.x} ${p1.y} Q ${cpX} ${cpY} ${p2.x} ${p2.y}`;
+
+        // 라벨 위치: Quadratic Bezier t=0.5 지점
+        // B(t) = (1-t)^2 P0 + 2(1-t)t P1 + t^2 P2
+        // t=0.5 => 0.25(P0+P2) + 0.5 P1
+        labelX = 0.25 * (p1.x + p2.x) + 0.5 * cpX;
+        labelY = 0.25 * (p1.y + p2.y) + 0.5 * cpY;
       }
 
       const strokeColor = type === 'g1' ? '#ef4444' : type === 'g2' ? '#3b82f6' : '#525252';
@@ -306,9 +345,13 @@ const HintPanel = ({
         <g key={i}>
           <path d={pathD} stroke={strokeColor} strokeWidth={strokeWidth} fill="none" opacity={opacity} />
           {!isLoop && highlight && (
-             <text x={(p1.x+p2.x)/2 + (e.cubeIdx-1.5)*10} y={(p1.y+p2.y)/2 + (e.cubeIdx-1.5)*10} fill="white" fontSize="12" textAnchor="middle">
-               {e.cubeIdx + 1}
-             </text>
+            // [수정] 라벨에 배경 원 추가하여 가독성 확보 및 위치 정확도 개선
+             <g>
+               <circle cx={labelX} cy={labelY} r="9" fill={strokeColor} />
+               <text x={labelX} y={labelY} dy="4" fill="white" fontSize="12" fontWeight="bold" textAnchor="middle">
+                 {e.cubeIdx + 1}
+               </text>
+             </g>
           )}
         </g>
       );
@@ -518,9 +561,6 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
   return (
     <div
       className="absolute flex items-center justify-center touch-none"
-      // [수정] zIndex를 5로 설정하여 큐브보다 아래에 있지만 터치는 가능하도록 (큐브는 기본 zIndex + @)
-      // 단, GameScreen에서 큐브 zIndex를 동적으로 조정하므로 여기선 기본값만 줌.
-      // 중요한 건 DOM 순서상 Platform이 Cube보다 앞에 와야(코드 상단) 뒤에 깔림.
       style={{
         transformStyle: 'preserve-3d',
         transform: `translateY(${platformY}px) rotateX(90deg)`,
@@ -551,14 +591,14 @@ const Cube = ({
   matrix, 
   towerRotation,
   onRotate,
-  baseZIndex // [추가] zIndex prop
+  baseZIndex 
 }: { 
   id: number; 
   colors: string[]; 
   matrix: number[]; 
   towerRotation: number;
   onRotate: (id: number, newMatrix: number[]) => void;
-  baseZIndex: number; // [추가]
+  baseZIndex: number; 
 }) => {
   const startPos = useRef({ x: 0, y: 0 });
   const [currentDragAngle, setCurrentDragAngle] = useState<{ axis: 'x' | 'y' | 'z', val: number } | null>(null);
@@ -721,7 +761,7 @@ const Cube = ({
         transformStyle: 'preserve-3d',
         transform: `translateY(${(id - 1.5) * (CUBE_SIZE + GAP)}px) matrix3d(${displayMatrix.join(',')})`,
         transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
-        zIndex: isDragging ? 100 : baseZIndex, // [수정] 드래그시 100, 아니면 baseZIndex
+        zIndex: isDragging ? 100 : baseZIndex, 
       }}
     >
       <CubeFace index={0} color={colors[0]} transform={`rotateX(90deg) translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} />
@@ -1129,6 +1169,7 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
   return (
     <div className="fixed inset-0 h-[100dvh] w-full bg-neutral-900 overflow-hidden touch-none overscroll-none flex flex-col items-center justify-center">
       
+      {/* [수정] 글로벌 스타일 주입 - 사파리 스크롤 방지 */}
       <style>{`
         html, body, #root {
           width: 100%;
@@ -1168,6 +1209,7 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
         isOpen={showMap}
       />
 
+      {/* 3D Viewport - [수정] 오버레이가 열려도 위치 고정 */}
       <div 
         className="relative w-64 h-96 perspective-container transition-transform duration-300" 
         style={{ perspective: '1200px' }}
