@@ -4,7 +4,7 @@ import { RotateCcw, Home, Play, Settings, Grid3X3, ChevronLeft, ChevronRight, Ch
 // ==========================================
 // 1. 상수 및 데이터 정의
 // ==========================================
-const APP_VERSION = "v1.0.6"; // [수정] 버전 업데이트
+const APP_VERSION = "v1.0.7"; // [수정] 버전 업데이트
 const CUBE_SIZE = 100;
 const GAP = 10;
 const DRAG_SENSITIVITY = 0.8; 
@@ -205,9 +205,9 @@ const HintPanel = ({
   puzzleData, 
   onClose, 
   onApply,
-  isOpen, // [추가] 슬라이드 상태 제어
-  step,   // [추가] 상태 승격
-  setStep // [추가] 상태 승격
+  isOpen, 
+  step,   
+  setStep 
 }: { 
   puzzleData: string[][], 
   onClose: () => void, 
@@ -269,9 +269,9 @@ const HintPanel = ({
   };
 
   return (
-    // [수정] 오른쪽 슬라이드 패널 (w-[80%])
+    // [수정] bottom-32 추가하여 하단 버튼 위까지만 내려오도록 설정 (h-full 제거)
     <div 
-      className={`fixed top-0 right-0 h-full w-[80%] max-w-sm z-50 bg-neutral-900/95 backdrop-blur-xl border-l border-neutral-700 shadow-2xl overflow-hidden flex flex-col transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+      className={`fixed top-4 right-4 bottom-32 w-[80%] max-w-sm z-30 bg-neutral-900/95 backdrop-blur-xl border border-neutral-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-[120%]'}`}
     >
       <div className="flex items-center justify-between p-4 border-b border-neutral-700">
         <h3 className="text-white font-bold flex items-center gap-2">
@@ -385,9 +385,9 @@ const HintPanel = ({
 
 const PuzzleMapOverlay = ({ puzzleData, onClose, isOpen }: { puzzleData: string[][], onClose: () => void, isOpen: boolean }) => {
   return (
-    // [수정] 왼쪽 슬라이드 패널 (w-[80%])
+    // [수정] bottom-32 추가하여 하단 버튼 위까지만 내려오도록 설정 (h-full 제거)
     <div 
-      className={`fixed top-0 left-0 h-full w-[80%] max-w-sm z-50 bg-neutral-900/95 backdrop-blur-xl border-r border-neutral-700 shadow-2xl overflow-y-auto flex flex-col gap-6 scrollbar-hide transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      className={`fixed top-4 left-4 bottom-32 w-[80%] max-w-sm z-30 bg-neutral-900/95 backdrop-blur-xl border border-neutral-700 rounded-2xl shadow-2xl overflow-y-auto flex flex-col gap-6 scrollbar-hide transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-[120%]'}`}
     >
        <div className="flex items-center justify-between border-b border-neutral-700 p-4 sticky top-0 bg-neutral-900/90 z-10">
         <h3 className="text-white font-bold flex items-center gap-2">
@@ -956,7 +956,7 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
     setTowerRotation(0);
     setShowHint(false);
     setShowMap(false);
-    setHintStep(1); // [추가] 리셋 시 힌트 단계 초기화
+    setHintStep(1); 
   };
 
   const applySolution = (g1: Subgraph, g2: Subgraph) => {
@@ -1054,7 +1054,6 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
         {APP_VERSION}
       </div>
 
-      {/* [수정] 조건부 렌더링 대신 항상 렌더링하고 스타일로 제어 (애니메이션 위해) */}
       <HintPanel 
         puzzleData={puzzleData} 
         onClose={() => setShowHint(false)} 
@@ -1069,14 +1068,6 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
         onClose={() => setShowMap(false)}
         isOpen={showMap}
       />
-
-      {/* [추가] 오버레이 배경 (Backdrop) */}
-      {(showHint || showMap) && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-20 backdrop-blur-sm transition-opacity duration-300"
-          onClick={() => { setShowHint(false); setShowMap(false); }}
-        />
-      )}
 
       {/* 3D Viewport - [수정] 오버레이가 열리면 더 많이 내림 */}
       <div 
@@ -1104,11 +1095,11 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
           <RotateCcw size={24} />
         </button>
 
-        <button onClick={() => setShowMap(!showMap)} className="w-14 h-14 bg-neutral-700 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform border-2 border-neutral-600 hover:bg-neutral-600">
+        <button onClick={() => { setShowMap(!showMap); if (!showMap) setShowHint(false); }} className="w-14 h-14 bg-neutral-700 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform border-2 border-neutral-600 hover:bg-neutral-600">
           <MapIcon size={24} />
         </button>
 
-        <button onClick={() => setShowHint(true)} className="w-14 h-14 bg-yellow-500 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform border-2 border-yellow-400 hover:bg-yellow-400 text-black">
+        <button onClick={() => { setShowHint(!showHint); if (!showHint) setShowMap(false); }} className="w-14 h-14 bg-yellow-500 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform border-2 border-yellow-400 hover:bg-yellow-400 text-black">
           <Lightbulb size={24} fill="currentColor" />
         </button>
       </div>
