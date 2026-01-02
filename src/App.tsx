@@ -4,7 +4,7 @@ import { RotateCcw, Home, Play, Settings, Grid3X3, ChevronLeft, ChevronRight, Ch
 // ==========================================
 // 1. 상수 및 데이터 정의
 // ==========================================
-const APP_VERSION = "v1.0.9"; // [수정] 버전 업데이트
+const APP_VERSION = "v1.0.10"; // [수정] 버전 업데이트
 const CUBE_SIZE = 100;
 const GAP = 10;
 const DRAG_SENSITIVITY = 0.8; 
@@ -340,7 +340,7 @@ const HintPanel = ({
       return (
         <g key={i}>
           <path d={pathD} stroke={strokeColor} strokeWidth={strokeWidth} fill="none" opacity={opacity} />
-          {!isLoop && highlight && (
+          {highlight && ( // [수정] !isLoop 제거하여 루프에도 라벨 표시
              <g>
                <circle cx={labelX} cy={labelY} r="9" fill={strokeColor} />
                <text x={labelX} y={labelY} dy="4" fill="white" fontSize="12" fontWeight="bold" textAnchor="middle">
