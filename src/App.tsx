@@ -4,7 +4,7 @@ import { RotateCcw, Home, Play, Settings, Grid3X3, ChevronLeft, ChevronRight, Ch
 // ==========================================
 // 1. 상수 및 데이터 정의
 // ==========================================
-const APP_VERSION = "v1.0.5"; // [수정] 버전 업데이트
+const APP_VERSION = "v1.0.6"; // [수정] 버전 업데이트
 const CUBE_SIZE = 100;
 const GAP = 10;
 const DRAG_SENSITIVITY = 0.8; 
@@ -204,13 +204,18 @@ const solveGraph = (puzzleData: string[][]) => {
 const HintPanel = ({ 
   puzzleData, 
   onClose, 
-  onApply 
+  onApply,
+  isOpen, // [추가] 슬라이드 상태 제어
+  step,   // [추가] 상태 승격
+  setStep // [추가] 상태 승격
 }: { 
   puzzleData: string[][], 
   onClose: () => void, 
-  onApply: (g1: Subgraph, g2: Subgraph) => void 
+  onApply: (g1: Subgraph, g2: Subgraph) => void,
+  isOpen: boolean,
+  step: number,
+  setStep: (s: number) => void
 }) => {
-  const [step, setStep] = useState(1);
   const solution = useMemo(() => solveGraph(puzzleData), [puzzleData]);
 
   const nodes = ['R', 'G', 'B', 'Y'];
@@ -264,7 +269,10 @@ const HintPanel = ({
   };
 
   return (
-    <div className="absolute top-4 left-4 right-4 md:right-4 md:left-auto md:w-80 z-30 bg-neutral-900/90 backdrop-blur-xl border border-neutral-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col transition-all max-h-[60vh] md:max-h-none">
+    // [수정] 오른쪽 슬라이드 패널 (w-[80%])
+    <div 
+      className={`fixed top-0 right-0 h-full w-[80%] max-w-sm z-50 bg-neutral-900/95 backdrop-blur-xl border-l border-neutral-700 shadow-2xl overflow-hidden flex flex-col transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+    >
       <div className="flex items-center justify-between p-4 border-b border-neutral-700">
         <h3 className="text-white font-bold flex items-center gap-2">
           <Lightbulb size={20} className="text-yellow-400" />
@@ -375,10 +383,13 @@ const HintPanel = ({
   );
 };
 
-const PuzzleMapOverlay = ({ puzzleData, onClose }: { puzzleData: string[][], onClose: () => void }) => {
+const PuzzleMapOverlay = ({ puzzleData, onClose, isOpen }: { puzzleData: string[][], onClose: () => void, isOpen: boolean }) => {
   return (
-    <div className="absolute top-4 left-4 right-4 md:right-auto md:w-64 z-30 max-h-[60vh] overflow-y-auto bg-neutral-900/90 backdrop-blur-xl border border-neutral-700 rounded-2xl shadow-2xl p-4 flex flex-col gap-6 scrollbar-hide">
-       <div className="flex items-center justify-between border-b border-neutral-700 pb-2">
+    // [수정] 왼쪽 슬라이드 패널 (w-[80%])
+    <div 
+      className={`fixed top-0 left-0 h-full w-[80%] max-w-sm z-50 bg-neutral-900/95 backdrop-blur-xl border-r border-neutral-700 shadow-2xl overflow-y-auto flex flex-col gap-6 scrollbar-hide transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
+    >
+       <div className="flex items-center justify-between border-b border-neutral-700 p-4 sticky top-0 bg-neutral-900/90 z-10">
         <h3 className="text-white font-bold flex items-center gap-2">
           <MapIcon size={18} className="text-blue-400" />
           Puzzle Map
@@ -388,7 +399,7 @@ const PuzzleMapOverlay = ({ puzzleData, onClose }: { puzzleData: string[][], onC
         </button>
       </div>
 
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 p-4">
         {puzzleData.map((faces, idx) => (
           <div key={idx} className="bg-neutral-800/50 p-2 rounded-lg border border-neutral-700/50">
             <div className="text-xs text-neutral-400 mb-2 ml-1 font-mono">Cube {idx + 1}</div>
@@ -424,7 +435,6 @@ const PuzzleMapOverlay = ({ puzzleData, onClose }: { puzzleData: string[][], onC
 // ==========================================
 
 const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
-  // [수정] useRef 사용으로 성능 및 반응성 개선
   const startX = useRef(0);
   const isDragging = useRef(false);
 
@@ -468,7 +478,7 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
         transform: `translateY(${platformY}px) rotateX(90deg)`,
         width: '320px',
         height: '320px',
-        cursor: 'grab', // 드래그 중인 커서는 전역적으로 제어하거나 단순화
+        cursor: 'grab', 
         touchAction: 'none',
       }}
       onPointerDown={handlePointerDown}
@@ -499,7 +509,6 @@ const Cube = ({
   towerRotation: number;
   onRotate: (id: number, newMatrix: number[]) => void;
 }) => {
-  // [수정] 드래그 추적을 useRef로 변경
   const startPos = useRef({ x: 0, y: 0 });
   const [currentDragAngle, setCurrentDragAngle] = useState<{ axis: 'x' | 'y' | 'z', val: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false); // UI 상태용
@@ -917,12 +926,14 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
   const [showHint, setShowHint] = useState(false);
   const [showMap, setShowMap] = useState(false);
 
+  // [추가] 힌트 단계 상태 승격 (State Lifting)
+  const [hintStep, setHintStep] = useState(1);
+
   const isOverlayOpen = showHint || showMap;
 
   // [수정] document 레벨 스크롤 방지 (Safari 대응)
   useEffect(() => {
     const preventScroll = (e: TouchEvent) => {
-      // 힌트/맵 오버레이 내부 스크롤은 허용하되, 그 외 영역은 막음
       const target = e.target as HTMLElement;
       if (target.closest('.overflow-y-auto')) return;
       e.preventDefault();
@@ -945,6 +956,7 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
     setTowerRotation(0);
     setShowHint(false);
     setShowMap(false);
+    setHintStep(1); // [추가] 리셋 시 힌트 단계 초기화
   };
 
   const applySolution = (g1: Subgraph, g2: Subgraph) => {
@@ -1042,18 +1054,27 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
         {APP_VERSION}
       </div>
 
-      {showHint && (
-        <HintPanel 
-          puzzleData={puzzleData} 
-          onClose={() => setShowHint(false)} 
-          onApply={applySolution}
-        />
-      )}
+      {/* [수정] 조건부 렌더링 대신 항상 렌더링하고 스타일로 제어 (애니메이션 위해) */}
+      <HintPanel 
+        puzzleData={puzzleData} 
+        onClose={() => setShowHint(false)} 
+        onApply={applySolution}
+        isOpen={showHint}
+        step={hintStep}
+        setStep={setHintStep}
+      />
 
-      {showMap && (
-        <PuzzleMapOverlay
-          puzzleData={puzzleData}
-          onClose={() => setShowMap(false)}
+      <PuzzleMapOverlay
+        puzzleData={puzzleData}
+        onClose={() => setShowMap(false)}
+        isOpen={showMap}
+      />
+
+      {/* [추가] 오버레이 배경 (Backdrop) */}
+      {(showHint || showMap) && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-20 backdrop-blur-sm transition-opacity duration-300"
+          onClick={() => { setShowHint(false); setShowMap(false); }}
         />
       )}
 
