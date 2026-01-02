@@ -4,7 +4,7 @@ import { RotateCcw, Home, Play, Settings, Grid3X3, ChevronLeft, ChevronRight, Ch
 // ==========================================
 // 1. 상수 및 데이터 정의
 // ==========================================
-const APP_VERSION = "v1.0.3"; // [수정] 버전 업데이트
+const APP_VERSION = "v1.0.4"; // [수정] 버전 업데이트
 const CUBE_SIZE = 100;
 const GAP = 10;
 const DRAG_SENSITIVITY = 0.8; 
@@ -428,9 +428,7 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
   const [isDragging, setIsDragging] = useState(false);
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    // [수정] 모바일 사파리 스크롤 방지
-    e.preventDefault(); 
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
     setIsDragging(true);
     setStartPos({ x: e.clientX, y: e.clientY });
@@ -439,7 +437,7 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!isDragging) return;
-    e.preventDefault(); // [수정] 터치 무브 이벤트 시 스크롤 방지
+    e.preventDefault();
     const diffX = e.clientX - startPos.x;
     onRotate(diffX * DRAG_SENSITIVITY);
     setStartPos({ x: e.clientX, y: e.clientY });
@@ -457,7 +455,6 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
   const platformY = bottomCubeY + CUBE_SIZE / 2;
 
   return (
-    // [수정] Platform 자체에도 이벤트 핸들러 부착 (래퍼가 아닌 실제 요소에)
     <div
       className="absolute flex items-center justify-center touch-none"
       style={{
@@ -468,14 +465,12 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
         cursor: isDragging ? 'grabbing' : 'grab',
         touchAction: 'none',
       }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerLeave={handlePointerUp}
     >
-      <div 
-        className="absolute w-full h-full rounded-full bg-neutral-700 border-4 border-neutral-600 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] flex items-center justify-center"
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerUp}
-      >
+      <div className="absolute w-full h-full rounded-full bg-neutral-700 border-4 border-neutral-600 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] flex items-center justify-center">
          <div className="w-2/3 h-2/3 rounded-full border-2 border-neutral-600/50 border-dashed pointer-events-none" />
       </div>
       <div className="absolute w-full h-full rounded-full bg-neutral-800 translate-z-[-10px]" />
@@ -660,7 +655,6 @@ const Cube = ({
         transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
         zIndex: isDragging ? 100 : 10,
       }}
-      // [수정] Cube 래퍼가 아닌 CubeFace에 이벤트 리스너 부착
     >
       <CubeFace index={0} color={colors[0]} transform={`rotateX(90deg) translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} />
       <CubeFace index={1} color={colors[1]} transform={`rotateY(-90deg) translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} />
@@ -672,7 +666,6 @@ const Cube = ({
   );
 };
 
-// [수정] CubeFace Props 확장
 const CubeFace = ({ 
   index, color, transform, 
   onPointerDown, onPointerMove, onPointerUp 
@@ -692,11 +685,10 @@ const CubeFace = ({
         WebkitBackfaceVisibility: 'hidden',
         outline: '2px solid black'
       }}
-      // [수정] 실제 면 요소에 이벤트 리스너 부착
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerLeave={onPointerUp} // 안전장치
+      onPointerLeave={onPointerUp} 
     >
       <div className="w-full h-full bg-gradient-to-br from-white/30 to-black/10 pointer-events-none absolute inset-0" />
     </div>
@@ -917,6 +909,7 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
   const [showHint, setShowHint] = useState(false);
   const [showMap, setShowMap] = useState(false);
 
+  // [수정] 오버레이가 열리면 타워를 더 아래로 내림
   const isOverlayOpen = showHint || showMap;
 
   // [수정] document 레벨 스크롤 방지 (Safari 대응)
@@ -1057,8 +1050,9 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
         />
       )}
 
+      {/* 3D Viewport - [수정] 오버레이가 열리면 더 많이 내림 */}
       <div 
-        className={`relative w-64 h-96 perspective-container transition-transform duration-300 ${isOverlayOpen ? 'scale-75 translate-y-48 md:translate-y-0 md:scale-100' : ''}`} 
+        className={`relative w-64 h-96 perspective-container transition-transform duration-300 ${isOverlayOpen ? 'scale-75 translate-y-48 md:translate-y-0 md:scale-100' : '-translate-y-24 md:translate-y-0'}`} 
         style={{ perspective: '1200px' }}
       >
         <div className="w-full h-full relative preserve-3d flex items-center justify-center" style={{ transform: 'rotateX(-20deg) rotateY(-30deg)' }}>
