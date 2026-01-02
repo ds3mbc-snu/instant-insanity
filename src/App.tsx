@@ -1,11 +1,11 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { RotateCcw, Home, Play, Settings, Grid3X3, ChevronLeft, ChevronRight, Check, Lightbulb, X as XIcon, Map as MapIcon } from 'lucide-react';
 
 // --- 상수 및 데이터 ---
-const APP_VERSION = "v1.0.0"; // 현재 버전
+const APP_VERSION = "v1.0.1"; // [수정] 버전 업데이트
 const CUBE_SIZE = 100;
 const GAP = 10;
-const DRAG_SENSITIVITY = 0.8; // 모바일 반응성을 위해 감도 약간 상향
+const DRAG_SENSITIVITY = 0.8; 
 
 // [색약 친화적 팔레트]
 const COLORS: Record<string, string> = {
@@ -18,10 +18,10 @@ const COLORS: Record<string, string> = {
 
 // 그래프 노드 색상 (SVG용)
 const GRAPH_COLORS: Record<string, string> = {
-  R: '#ea580c', // orange-600
-  G: '#059669', // emerald-600
-  B: '#1d4ed8', // blue-700
-  Y: '#facc15', // yellow-400
+  R: '#ea580c', 
+  G: '#059669', 
+  B: '#1d4ed8', 
+  Y: '#facc15', 
 };
 
 const INPUT_COLORS: Record<string, string> = {
@@ -104,7 +104,6 @@ const getRotationMatrix = (axis: 'x' | 'y' | 'z', angle: number) => {
   return m;
 };
 
-// 큐브의 24가지 모든 회전 상태 행렬 생성 헬퍼
 const getAllRotations = () => {
   const rotations: number[][] = [];
   const faceToFront = [
@@ -131,17 +130,13 @@ const INITIAL_NORMALS = [
   [1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0]
 ];
 
-// ------------------------------------------------------------------
-// [Graph Solver Logic] 그래프 이론 기반 솔버
-// ------------------------------------------------------------------
-
+// --- Graph Solver Logic ---
 type Edge = { u: string, v: string, cubeIdx: number, pairIdx: number };
 type Subgraph = Edge[];
 
 const extractEdges = (puzzleData: string[][]): Edge[] => {
   const edges: Edge[] = [];
   puzzleData.forEach((colors, cubeIdx) => {
-    // Pairs: (0,5), (1,3), (2,4) based on [Top, Left, Front, Right, Back, Bottom]
     const pairs = [[0, 5], [1, 3], [2, 4]];
     pairs.forEach((p, pairIdx) => {
       edges.push({ u: colors[p[0]], v: colors[p[1]], cubeIdx, pairIdx });
@@ -192,9 +187,7 @@ const solveGraph = (puzzleData: string[][]) => {
   return { g1, g2, allEdges };
 };
 
-// ------------------------------------------------------------------
-// [UI Components]
-// ------------------------------------------------------------------
+// --- UI Components ---
 
 const HintPanel = ({ 
   puzzleData, 
@@ -259,7 +252,6 @@ const HintPanel = ({
   };
 
   return (
-    // 모바일 레이아웃: 상단 고정 + 가로 꽉 참
     <div className="absolute top-4 left-4 right-4 md:right-4 md:left-auto md:w-80 z-30 bg-neutral-900/90 backdrop-blur-xl border border-neutral-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col transition-all max-h-[60vh] md:max-h-none">
       <div className="flex items-center justify-between p-4 border-b border-neutral-700">
         <h3 className="text-white font-bold flex items-center gap-2">
@@ -371,7 +363,6 @@ const HintPanel = ({
   );
 };
 
-// --- PuzzleMapOverlay Component ---
 const PuzzleMapOverlay = ({ puzzleData, onClose }: { puzzleData: string[][], onClose: () => void }) => {
   return (
     <div className="absolute top-4 left-4 right-4 md:right-auto md:w-64 z-30 max-h-[60vh] overflow-y-auto bg-neutral-900/90 backdrop-blur-xl border border-neutral-700 rounded-2xl shadow-2xl p-4 flex flex-col gap-6 scrollbar-hide">
@@ -416,13 +407,6 @@ const PuzzleMapOverlay = ({ puzzleData, onClose }: { puzzleData: string[][], onC
   )
 }
 
-// --- Platform Component ---
-interface PlatformProps {
-  onRotateStart: () => void;
-  onRotate: (delta: number) => void;
-  onRotateEnd: () => void;
-}
-
 const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -456,7 +440,7 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
 
   return (
     <div
-      className="absolute flex items-center justify-center"
+      className="absolute flex items-center justify-center touch-none" // [수정] touch-none 추가
       style={{
         transformStyle: 'preserve-3d',
         transform: `translateY(${platformY}px) rotateX(90deg)`,
@@ -480,7 +464,6 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
   );
 };
 
-// --- Cube Component ---
 const Cube = ({ 
   id, 
   colors, 
@@ -675,7 +658,7 @@ const CubeFace = ({ index, color, transform }: { index: number, color: string; t
   return (
     <div
       data-face-index={index}
-      className={`absolute w-full h-full border-[3px] border-black flex items-center justify-center box-border ${COLORS[color]}`}
+      className={`absolute w-full h-full border-[3px] border-black flex items-center justify-center box-border touch-none ${COLORS[color]}`} // [수정] touch-none 추가
       style={{ 
         transform, 
         backfaceVisibility: 'hidden', 
@@ -688,7 +671,6 @@ const CubeFace = ({ index, color, transform }: { index: number, color: string; t
   );
 };
 
-// --- FaceInput for Editor ---
 const FaceInput = ({ value, onChange, label, onPaste }: { value: string, onChange: (v: string) => void, label: string, onPaste?: (e: React.ClipboardEvent<HTMLInputElement>) => void }) => {
   const style = INPUT_COLORS[value] || INPUT_COLORS.DEFAULT;
   
@@ -707,7 +689,6 @@ const FaceInput = ({ value, onChange, label, onPaste }: { value: string, onChang
   );
 };
 
-// --- CustomPuzzleEditor Component ---
 const CustomPuzzleEditor = ({ onStart, onBack }: { onStart: (data: string[][]) => void, onBack: () => void }) => {
   const [puzzleData, setPuzzleData] = useState<string[][]>(
     PRESET_PUZZLES.custom.map(row => [...row])
@@ -740,8 +721,7 @@ const CustomPuzzleEditor = ({ onStart, onBack }: { onStart: (data: string[][]) =
   };
 
   return (
-    // [수정] fixed inset-0, h-[100dvh], overflow-hidden으로 스크롤 고정 (새로고침 방지)
-    <div className="fixed inset-0 h-[100dvh] w-full bg-neutral-900 overflow-hidden overscroll-none flex flex-col">
+    <div className="fixed inset-0 h-[100dvh] w-full bg-neutral-900 overflow-hidden overscroll-none touch-none flex flex-col">
       <div className="w-full flex-none flex items-center justify-between p-6">
         <button onClick={onBack} className="p-2 text-white hover:bg-white/10 rounded-full">
           <ChevronLeft size={32} />
@@ -750,7 +730,6 @@ const CustomPuzzleEditor = ({ onStart, onBack }: { onStart: (data: string[][]) =
         <div className="w-10"></div> 
       </div>
 
-      {/* 내부 스크롤 영역 */}
       <div className="flex-1 w-full overflow-y-auto p-6 pb-32">
         <div className="flex flex-col gap-8 w-full max-w-2xl mx-auto">
           {puzzleData.map((cubeFaces, cubeIdx) => (
@@ -825,10 +804,8 @@ const CustomPuzzleEditor = ({ onStart, onBack }: { onStart: (data: string[][]) =
   );
 };
 
-// --- HomeScreen Component ---
 const HomeScreen = ({ onStart, onCustom }: { onStart: (data: string[][]) => void, onCustom: () => void }) => {
   return (
-    // [수정] fixed inset-0, h-[100dvh], overflow-hidden으로 스크롤 고정
     <div className="fixed inset-0 h-[100dvh] w-full bg-neutral-900 overflow-hidden touch-none overscroll-none flex flex-col items-center justify-center p-6 space-y-12">
       <div className="text-center space-y-2 animate-fade-in-up">
         <h1 className="text-5xl md:text-7xl font-black text-white tracking-widest drop-shadow-2xl" style={{ fontFamily: 'Impact, sans-serif' }}>
@@ -890,7 +867,6 @@ const HomeScreen = ({ onStart, onCustom }: { onStart: (data: string[][]) => void
   );
 };
 
-// --- GameScreen Component ---
 const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: () => void }) => {
   const [cubeMatrices, setCubeMatrices] = useState<number[][]>(
     puzzleData.map(() => [...IDENTITY_MATRIX])
@@ -898,11 +874,10 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
   const [towerRotation, setTowerRotation] = useState(0);
   const [isTowerDragging, setIsTowerDragging] = useState(false);
   
-  // Hint & Map States
   const [showHint, setShowHint] = useState(false);
   const [showMap, setShowMap] = useState(false);
 
-  // [수정] 오버레이가 켜져있는지 여부 (3D 뷰 축소용)
+  // [수정] 오버레이가 열리면 타워를 더 아래로 내림 (translate-y-48)
   const isOverlayOpen = showHint || showMap;
 
   const handleRotate = (id: number, newMatrix: number[]) => {
@@ -994,7 +969,6 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
   };
 
   return (
-    // [수정] fixed inset-0, h-[100dvh], overflow-hidden으로 스크롤 고정
     <div className="fixed inset-0 h-[100dvh] w-full bg-neutral-900 overflow-hidden touch-none overscroll-none flex flex-col items-center justify-center">
       
       <div className="absolute top-2 left-2 text-xs text-neutral-600 font-mono z-10 select-none">
@@ -1016,9 +990,9 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
         />
       )}
 
-      {/* 3D Viewport - [수정] 오버레이가 열리면 스케일을 줄여서 공간 확보 */}
+      {/* 3D Viewport - [수정] 오버레이가 열리면 더 많이 내림 */}
       <div 
-        className={`relative w-64 h-96 perspective-container transition-transform duration-300 ${isOverlayOpen ? 'scale-75 translate-y-12 md:translate-y-0 md:scale-100' : ''}`} 
+        className={`relative w-64 h-96 perspective-container transition-transform duration-300 ${isOverlayOpen ? 'scale-75 translate-y-48 md:translate-y-0 md:scale-100' : ''}`} 
         style={{ perspective: '1200px' }}
       >
         <div className="w-full h-full relative preserve-3d flex items-center justify-center" style={{ transform: 'rotateX(-20deg) rotateY(-30deg)' }}>
@@ -1038,7 +1012,6 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
           <Home size={24} />
         </button>
         
-        {/* Reset Button (Blue) - Size adjusted */}
         <button onClick={handleReset} className="w-14 h-14 bg-blue-600 rounded-full flex items-center justify-center text-white shadow-xl shadow-blue-900/50 active:scale-95 transition-transform border-2 border-blue-500 hover:bg-blue-500">
           <RotateCcw size={24} />
         </button>
