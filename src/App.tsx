@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { RotateCcw, Home, Play, Settings, Grid3X3, ChevronLeft, ChevronRight, Check, Lightbulb, X as XIcon, Map as MapIcon } from 'lucide-react';
 
 // --- 상수 및 데이터 ---
+const APP_VERSION = "v1.0.0"; // 현재 버전
 const CUBE_SIZE = 100;
 const GAP = 10;
 const DRAG_SENSITIVITY = 0.8; // 모바일 반응성을 위해 감도 약간 상향
@@ -140,6 +141,7 @@ type Subgraph = Edge[];
 const extractEdges = (puzzleData: string[][]): Edge[] => {
   const edges: Edge[] = [];
   puzzleData.forEach((colors, cubeIdx) => {
+    // Pairs: (0,5), (1,3), (2,4) based on [Top, Left, Front, Right, Back, Bottom]
     const pairs = [[0, 5], [1, 3], [2, 4]];
     pairs.forEach((p, pairIdx) => {
       edges.push({ u: colors[p[0]], v: colors[p[1]], cubeIdx, pairIdx });
@@ -990,6 +992,10 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
   return (
     <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center overflow-hidden touch-none overscroll-none">
       
+      <div className="absolute top-2 left-2 text-xs text-neutral-600 font-mono z-10 select-none">
+        {APP_VERSION}
+      </div>
+
       {showHint && (
         <HintPanel 
           puzzleData={puzzleData} 
