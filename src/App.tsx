@@ -1,13 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { RotateCcw, Home, Play, Settings, Grid3X3, ChevronLeft, ChevronRight, Check, Lightbulb, X as XIcon, Map as MapIcon } from 'lucide-react';
 
-// --- 상수 및 데이터 ---
-const APP_VERSION = "v1.0.1"; // [수정] 버전 업데이트
+// ==========================================
+// 1. 상수 및 데이터 정의
+// ==========================================
+const APP_VERSION = "v1.0.1";
 const CUBE_SIZE = 100;
 const GAP = 10;
 const DRAG_SENSITIVITY = 0.8; 
 
-// [색약 친화적 팔레트]
 const COLORS: Record<string, string> = {
   R: 'bg-orange-600', 
   G: 'bg-emerald-600',   
@@ -16,7 +17,6 @@ const COLORS: Record<string, string> = {
   X: 'bg-neutral-700 border-neutral-600',
 };
 
-// 그래프 노드 색상 (SVG용)
 const GRAPH_COLORS: Record<string, string> = {
   R: '#ea580c', 
   G: '#059669', 
@@ -32,7 +32,6 @@ const INPUT_COLORS: Record<string, string> = {
   DEFAULT: 'bg-neutral-800 text-neutral-400 border-neutral-600', 
 };
 
-// --- 퍼즐 데이터 ---
 const PUZZLE_1 = [
   ['B', 'R', 'Y', 'G', 'B', 'R'], 
   ['R', 'R', 'Y', 'B', 'G', 'Y'], 
@@ -68,7 +67,22 @@ const PRESET_PUZZLES = {
   custom: PUZZLE_CUSTOM_DEFAULT,
 };
 
-// --- Matrix Math Utilities ---
+// ==========================================
+// 2. 타입 정의 (Types)
+// ==========================================
+type Edge = { u: string, v: string, cubeIdx: number, pairIdx: number };
+type Subgraph = Edge[];
+
+// [수정] PlatformProps 인터페이스를 상단으로 이동하여 명확하게 정의
+interface PlatformProps {
+  onRotateStart: () => void;
+  onRotate: (delta: number) => void;
+  onRotateEnd: () => void;
+}
+
+// ==========================================
+// 3. 유틸리티 함수 (Math & Logic)
+// ==========================================
 const IDENTITY_MATRIX = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 
 const multiplyMatrix = (a: number[], b: number[]) => {
@@ -131,9 +145,6 @@ const INITIAL_NORMALS = [
 ];
 
 // --- Graph Solver Logic ---
-type Edge = { u: string, v: string, cubeIdx: number, pairIdx: number };
-type Subgraph = Edge[];
-
 const extractEdges = (puzzleData: string[][]): Edge[] => {
   const edges: Edge[] = [];
   puzzleData.forEach((colors, cubeIdx) => {
@@ -187,7 +198,9 @@ const solveGraph = (puzzleData: string[][]) => {
   return { g1, g2, allEdges };
 };
 
-// --- UI Components ---
+// ==========================================
+// 4. 서브 컴포넌트 (UI Parts)
+// ==========================================
 
 const HintPanel = ({ 
   puzzleData, 
@@ -407,6 +420,45 @@ const PuzzleMapOverlay = ({ puzzleData, onClose }: { puzzleData: string[][], onC
   )
 }
 
+const CubeFace = ({ index, color, transform }: { index: number, color: string; transform: string }) => {
+  return (
+    <div
+      data-face-index={index}
+      className={`absolute w-full h-full border-[3px] border-black flex items-center justify-center box-border touch-none ${COLORS[color]}`}
+      style={{ 
+        transform, 
+        backfaceVisibility: 'hidden', 
+        WebkitBackfaceVisibility: 'hidden',
+        outline: '2px solid black'
+      }}
+    >
+      <div className="w-full h-full bg-gradient-to-br from-white/30 to-black/10 pointer-events-none absolute inset-0" />
+    </div>
+  );
+};
+
+const FaceInput = ({ value, onChange, label, onPaste }: { value: string, onChange: (v: string) => void, label: string, onPaste?: (e: React.ClipboardEvent<HTMLInputElement>) => void }) => {
+  const style = INPUT_COLORS[value] || INPUT_COLORS.DEFAULT;
+  
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onPaste={onPaste}
+        maxLength={1}
+        className={`w-12 h-12 text-center text-xl font-bold uppercase rounded-md border-2 focus:outline-none focus:border-white transition-colors ${style}`}
+      />
+      <span className="text-[10px] text-neutral-500 uppercase">{label}</span>
+    </div>
+  );
+};
+
+// ==========================================
+// 5. 메인 컴포넌트 (Components)
+// ==========================================
+
 const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -440,7 +492,7 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
 
   return (
     <div
-      className="absolute flex items-center justify-center touch-none" // [수정] touch-none 추가
+      className="absolute flex items-center justify-center touch-none"
       style={{
         transformStyle: 'preserve-3d',
         transform: `translateY(${platformY}px) rotateX(90deg)`,
@@ -654,41 +706,6 @@ const Cube = ({
   );
 };
 
-const CubeFace = ({ index, color, transform }: { index: number, color: string; transform: string }) => {
-  return (
-    <div
-      data-face-index={index}
-      className={`absolute w-full h-full border-[3px] border-black flex items-center justify-center box-border touch-none ${COLORS[color]}`} // [수정] touch-none 추가
-      style={{ 
-        transform, 
-        backfaceVisibility: 'hidden', 
-        WebkitBackfaceVisibility: 'hidden',
-        outline: '2px solid black'
-      }}
-    >
-      <div className="w-full h-full bg-gradient-to-br from-white/30 to-black/10 pointer-events-none absolute inset-0" />
-    </div>
-  );
-};
-
-const FaceInput = ({ value, onChange, label, onPaste }: { value: string, onChange: (v: string) => void, label: string, onPaste?: (e: React.ClipboardEvent<HTMLInputElement>) => void }) => {
-  const style = INPUT_COLORS[value] || INPUT_COLORS.DEFAULT;
-  
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onPaste={onPaste}
-        maxLength={1}
-        className={`w-12 h-12 text-center text-xl font-bold uppercase rounded-md border-2 focus:outline-none focus:border-white transition-colors ${style}`}
-      />
-      <span className="text-[10px] text-neutral-500 uppercase">{label}</span>
-    </div>
-  );
-};
-
 const CustomPuzzleEditor = ({ onStart, onBack }: { onStart: (data: string[][]) => void, onBack: () => void }) => {
   const [puzzleData, setPuzzleData] = useState<string[][]>(
     PRESET_PUZZLES.custom.map(row => [...row])
@@ -877,7 +894,7 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
   const [showHint, setShowHint] = useState(false);
   const [showMap, setShowMap] = useState(false);
 
-  // [수정] 오버레이가 열리면 타워를 더 아래로 내림 (translate-y-48)
+  // [수정] 오버레이가 열리면 타워를 더 아래로 내림
   const isOverlayOpen = showHint || showMap;
 
   const handleRotate = (id: number, newMatrix: number[]) => {
