@@ -6,27 +6,27 @@ const CUBE_SIZE = 100;
 const GAP = 10;
 const DRAG_SENSITIVITY = 0.6;
 
-// [색약 친화적 팔레트]
+// [수정] 색약 친화적 팔레트 개선 (G와 B 구분 강화)
 const COLORS: Record<string, string> = {
-  R: 'bg-orange-600', 
-  G: 'bg-teal-600',   
-  B: 'bg-sky-600',    
-  Y: 'bg-yellow-400', 
+  R: 'bg-orange-600', // Vermilion (주황빛 빨강)
+  G: 'bg-emerald-600', // [변경] Teal -> Emerald (더 선명한 초록)
+  B: 'bg-blue-700',    // [변경] Sky -> Blue-700 (더 진한 파랑, 명도 차이 확보)
+  Y: 'bg-yellow-400', // Yellow
   X: 'bg-neutral-700 border-neutral-600',
 };
 
-// 그래프 노드 색상 (SVG용)
+// 그래프 노드 색상 (SVG용) - [변경] UI 색상과 동기화
 const GRAPH_COLORS: Record<string, string> = {
   R: '#ea580c', // orange-600
-  G: '#0d9488', // teal-600
-  B: '#0284c7', // sky-600
+  G: '#059669', // emerald-600 [변경]
+  B: '#1d4ed8', // blue-700 [변경]
   Y: '#facc15', // yellow-400
 };
 
 const INPUT_COLORS: Record<string, string> = {
   R: 'bg-orange-600 text-white',
-  G: 'bg-teal-600 text-white',
-  B: 'bg-sky-600 text-white',
+  G: 'bg-emerald-600 text-white', // [변경]
+  B: 'bg-blue-700 text-white',    // [변경]
   Y: 'bg-yellow-400 text-black', 
   DEFAULT: 'bg-neutral-800 text-neutral-400 border-neutral-600', 
 };
@@ -832,7 +832,6 @@ const HomeScreen = ({ onStart, onCustom }: { onStart: (data: string[][]) => void
         <h1 className="text-5xl md:text-7xl font-black text-white tracking-widest drop-shadow-2xl" style={{ fontFamily: 'Impact, sans-serif' }}>
           INSTANT<br/>INSANITY
         </h1>
-        <p className="text-neutral-400 text-lg">4개의 큐브, 4개의 면, 하나의 정답</p>
       </div>
 
       <div className="w-full max-w-sm space-y-4">
@@ -928,7 +927,7 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
     };
 
     // 1. 각 큐브별로 그래프 조건(축 정렬)을 만족하는 회전 후보군(4개) 찾기
-    const cubeCandidates = puzzleData.map((colors, cubeIdx) => {
+    const cubeCandidates = puzzleData.map((_, cubeIdx) => {
       const e1 = g1.find(e => e.cubeIdx === cubeIdx); // Front-Back Pair
       const e2 = g2.find(e => e.cubeIdx === cubeIdx); // Left-Right Pair
       
@@ -1045,11 +1044,11 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
           <Home size={24} />
         </button>
         
+        {/* Reset Button (Blue) - Size adjusted to match Home/Hint */}
         <button onClick={handleReset} className="w-14 h-14 bg-blue-600 rounded-full flex items-center justify-center text-white shadow-xl shadow-blue-900/50 active:scale-95 transition-transform border-2 border-blue-500 hover:bg-blue-500">
           <RotateCcw size={24} />
         </button>
 
-        {/* [추가] 전개도 버튼 (Reset과 Hint 사이) */}
         <button onClick={() => setShowMap(!showMap)} className="w-14 h-14 bg-neutral-700 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform border-2 border-neutral-600 hover:bg-neutral-600">
           <MapIcon size={24} />
         </button>
