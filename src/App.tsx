@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { RotateCcw, Home, Play, Settings, Grid3X3, ChevronLeft, ChevronRight, Check, Lightbulb, X as XIcon, Map as MapIcon } from 'lucide-react';
 
 // ==========================================
 // 1. 상수 및 데이터 정의
 // ==========================================
-const APP_VERSION = "v1.0.2"; // [수정] 버전 업데이트
+const APP_VERSION = "v1.0.3"; // [수정] 버전 업데이트
 const CUBE_SIZE = 100;
 const GAP = 10;
 const DRAG_SENSITIVITY = 0.8; 
@@ -457,6 +457,7 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
   const platformY = bottomCubeY + CUBE_SIZE / 2;
 
   return (
+    // [수정] Platform 자체에도 이벤트 핸들러 부착 (래퍼가 아닌 실제 요소에)
     <div
       className="absolute flex items-center justify-center touch-none"
       style={{
@@ -465,19 +466,21 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
         width: '320px',
         height: '320px',
         cursor: isDragging ? 'grabbing' : 'grab',
-        touchAction: 'none', // [수정] 중요
+        touchAction: 'none',
       }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerUp}
     >
-      <div className="absolute w-full h-full rounded-full bg-neutral-700 border-4 border-neutral-600 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] flex items-center justify-center">
-         <div className="w-2/3 h-2/3 rounded-full border-2 border-neutral-600/50 border-dashed" />
+      <div 
+        className="absolute w-full h-full rounded-full bg-neutral-700 border-4 border-neutral-600 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] flex items-center justify-center"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerUp}
+      >
+         <div className="w-2/3 h-2/3 rounded-full border-2 border-neutral-600/50 border-dashed pointer-events-none" />
       </div>
       <div className="absolute w-full h-full rounded-full bg-neutral-800 translate-z-[-10px]" />
       <div className="absolute w-full h-full rounded-full bg-neutral-800 translate-z-[-20px] shadow-xl" />
-      <div className="absolute text-white/20 font-bold text-4xl select-none animate-pulse">⟲ ⟳</div>
+      <div className="absolute text-white/20 font-bold text-4xl select-none animate-pulse pointer-events-none">⟲ ⟳</div>
     </div>
   );
 };
@@ -504,7 +507,6 @@ const Cube = ({
   const [touchedFaceIndex, setTouchedFaceIndex] = useState<number | null>(null);
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    // [수정] 모바일 사파리 대응: preventDefault 필수
     e.preventDefault(); 
     e.stopPropagation();
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
@@ -658,27 +660,31 @@ const Cube = ({
         transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
         zIndex: isDragging ? 100 : 10,
       }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      onPointerLeave={handlePointerUp}
+      // [수정] Cube 래퍼가 아닌 CubeFace에 이벤트 리스너 부착
     >
-      <CubeFace index={0} color={colors[0]} transform={`rotateX(90deg) translateZ(${halfSize}px)`} />
-      <CubeFace index={1} color={colors[1]} transform={`rotateY(-90deg) translateZ(${halfSize}px)`} />
-      <CubeFace index={2} color={colors[2]} transform={`translateZ(${halfSize}px)`} />
-      <CubeFace index={3} color={colors[3]} transform={`rotateY(90deg) translateZ(${halfSize}px)`} />
-      <CubeFace index={4} color={colors[4]} transform={`rotateY(180deg) translateZ(${halfSize}px)`} />
-      <CubeFace index={5} color={colors[5]} transform={`rotateX(-90deg) translateZ(${halfSize}px)`} />
+      <CubeFace index={0} color={colors[0]} transform={`rotateX(90deg) translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} />
+      <CubeFace index={1} color={colors[1]} transform={`rotateY(-90deg) translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} />
+      <CubeFace index={2} color={colors[2]} transform={`translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} />
+      <CubeFace index={3} color={colors[3]} transform={`rotateY(90deg) translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} />
+      <CubeFace index={4} color={colors[4]} transform={`rotateY(180deg) translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} />
+      <CubeFace index={5} color={colors[5]} transform={`rotateX(-90deg) translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} />
     </div>
   );
 };
 
-const CubeFace = ({ index, color, transform }: { index: number, color: string; transform: string }) => {
+// [수정] CubeFace Props 확장
+const CubeFace = ({ 
+  index, color, transform, 
+  onPointerDown, onPointerMove, onPointerUp 
+}: { 
+  index: number, color: string, transform: string,
+  onPointerDown: (e: React.PointerEvent) => void,
+  onPointerMove: (e: React.PointerEvent) => void,
+  onPointerUp: (e: React.PointerEvent) => void
+}) => {
   return (
     <div
       data-face-index={index}
-      // [수정] touch-none 클래스 추가 (중요)
       className={`absolute w-full h-full border-[3px] border-black flex items-center justify-center box-border touch-none ${COLORS[color]}`}
       style={{ 
         transform, 
@@ -686,6 +692,11 @@ const CubeFace = ({ index, color, transform }: { index: number, color: string; t
         WebkitBackfaceVisibility: 'hidden',
         outline: '2px solid black'
       }}
+      // [수정] 실제 면 요소에 이벤트 리스너 부착
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerLeave={onPointerUp} // 안전장치
     >
       <div className="w-full h-full bg-gradient-to-br from-white/30 to-black/10 pointer-events-none absolute inset-0" />
     </div>
@@ -906,8 +917,20 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
   const [showHint, setShowHint] = useState(false);
   const [showMap, setShowMap] = useState(false);
 
-  // [수정] 오버레이가 열리면 타워를 더 아래로 내림
   const isOverlayOpen = showHint || showMap;
+
+  // [수정] document 레벨 스크롤 방지 (Safari 대응)
+  useEffect(() => {
+    const preventScroll = (e: TouchEvent) => {
+      // 힌트/맵 오버레이 내부 스크롤은 허용하되, 그 외 영역은 막음
+      const target = e.target as HTMLElement;
+      if (target.closest('.overflow-y-auto')) return;
+      e.preventDefault();
+    };
+
+    document.addEventListener('touchmove', preventScroll, { passive: false });
+    return () => document.removeEventListener('touchmove', preventScroll);
+  }, []);
 
   const handleRotate = (id: number, newMatrix: number[]) => {
     setCubeMatrices(prev => {
@@ -1034,7 +1057,6 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
         />
       )}
 
-      {/* 3D Viewport - [수정] 오버레이가 열리면 더 많이 내림 */}
       <div 
         className={`relative w-64 h-96 perspective-container transition-transform duration-300 ${isOverlayOpen ? 'scale-75 translate-y-48 md:translate-y-0 md:scale-100' : ''}`} 
         style={{ perspective: '1200px' }}
@@ -1056,7 +1078,6 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
           <Home size={24} />
         </button>
         
-        {/* Reset Button (Blue) - Size adjusted */}
         <button onClick={handleReset} className="w-14 h-14 bg-blue-600 rounded-full flex items-center justify-center text-white shadow-xl shadow-blue-900/50 active:scale-95 transition-transform border-2 border-blue-500 hover:bg-blue-500">
           <RotateCcw size={24} />
         </button>
