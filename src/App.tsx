@@ -929,6 +929,7 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
   // [추가] 힌트 단계 상태 승격 (State Lifting)
   const [hintStep, setHintStep] = useState(1);
 
+  // [수정] 오버레이가 열려도 타워 위치나 스케일을 변경하지 않음 (그대로 유지)
   const isOverlayOpen = showHint || showMap;
 
   // [수정] document 레벨 스크롤 방지 (Safari 대응)
@@ -1069,9 +1070,9 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
         isOpen={showMap}
       />
 
-      {/* 3D Viewport - [수정] 오버레이가 열리면 더 많이 내림 */}
+      {/* 3D Viewport - [수정] 오버레이가 열려도 위치 고정 (scale 제거) */}
       <div 
-        className={`relative w-64 h-96 perspective-container transition-transform duration-300 ${isOverlayOpen ? 'scale-75 translate-y-48 md:translate-y-0 md:scale-100' : '-translate-y-24 md:translate-y-0'}`} 
+        className="relative w-64 h-96 perspective-container transition-transform duration-300" 
         style={{ perspective: '1200px' }}
       >
         <div className="w-full h-full relative preserve-3d flex items-center justify-center" style={{ transform: 'rotateX(-20deg) rotateY(-30deg)' }}>
