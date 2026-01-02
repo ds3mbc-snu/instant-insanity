@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { RotateCcw, Home, Play, Settings, Grid3X3, ChevronLeft, ChevronRight, Check, Lightbulb, X as XIcon, Map as MapIcon } from 'lucide-react';
 
 // --- 상수 및 데이터 ---
@@ -259,7 +259,7 @@ const HintPanel = ({
   };
 
   return (
-    // [수정] 모바일 레이아웃 개선: 상단 고정 + 가로 꽉 참
+    // 모바일 레이아웃: 상단 고정 + 가로 꽉 참
     <div className="absolute top-4 left-4 right-4 md:right-4 md:left-auto md:w-80 z-30 bg-neutral-900/90 backdrop-blur-xl border border-neutral-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col transition-all max-h-[60vh] md:max-h-none">
       <div className="flex items-center justify-between p-4 border-b border-neutral-700">
         <h3 className="text-white font-bold flex items-center gap-2">
@@ -374,7 +374,6 @@ const HintPanel = ({
 // --- PuzzleMapOverlay Component ---
 const PuzzleMapOverlay = ({ puzzleData, onClose }: { puzzleData: string[][], onClose: () => void }) => {
   return (
-    // [수정] 모바일 레이아웃 개선: 상단 고정
     <div className="absolute top-4 left-4 right-4 md:right-auto md:w-64 z-30 max-h-[60vh] overflow-y-auto bg-neutral-900/90 backdrop-blur-xl border border-neutral-700 rounded-2xl shadow-2xl p-4 flex flex-col gap-6 scrollbar-hide">
        <div className="flex items-center justify-between border-b border-neutral-700 pb-2">
         <h3 className="text-white font-bold flex items-center gap-2">
@@ -741,8 +740,9 @@ const CustomPuzzleEditor = ({ onStart, onBack }: { onStart: (data: string[][]) =
   };
 
   return (
-    <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-start p-6 overflow-y-auto overscroll-none touch-none">
-      <div className="w-full max-w-2xl flex items-center justify-between mb-8 mt-4">
+    // [수정] fixed inset-0, h-[100dvh], overflow-hidden으로 스크롤 고정 (새로고침 방지)
+    <div className="fixed inset-0 h-[100dvh] w-full bg-neutral-900 overflow-hidden overscroll-none flex flex-col">
+      <div className="w-full flex-none flex items-center justify-between p-6">
         <button onClick={onBack} className="p-2 text-white hover:bg-white/10 rounded-full">
           <ChevronLeft size={32} />
         </button>
@@ -750,63 +750,66 @@ const CustomPuzzleEditor = ({ onStart, onBack }: { onStart: (data: string[][]) =
         <div className="w-10"></div> 
       </div>
 
-      <div className="flex flex-col gap-8 w-full max-w-2xl pb-32">
-        {puzzleData.map((cubeFaces, cubeIdx) => (
-          <div key={cubeIdx} className="bg-neutral-800 p-4 rounded-xl border border-neutral-700">
-            <h3 className="text-white font-bold mb-4 ml-2">Cube {cubeIdx + 1}</h3>
-            
-            <div className="grid grid-cols-4 gap-2 w-max mx-auto">
-              <div className="col-start-2">
-                <FaceInput 
-                  value={cubeFaces[0]} 
-                  onChange={(v) => handleInputChange(cubeIdx, 0, v)} 
-                  onPaste={(e) => handlePaste(cubeIdx, e)}
-                  label="Top"
-                />
-              </div>
-              <div className="col-start-1 row-start-2">
-                <FaceInput 
-                  value={cubeFaces[1]} 
-                  onChange={(v) => handleInputChange(cubeIdx, 1, v)} 
-                  onPaste={(e) => handlePaste(cubeIdx, e)}
-                  label="Left"
-                />
-              </div>
-              <div className="col-start-2 row-start-2">
-                <FaceInput 
-                  value={cubeFaces[2]} 
-                  onChange={(v) => handleInputChange(cubeIdx, 2, v)} 
-                  onPaste={(e) => handlePaste(cubeIdx, e)}
-                  label="Front"
-                />
-              </div>
-              <div className="col-start-3 row-start-2">
-                <FaceInput 
-                  value={cubeFaces[3]} 
-                  onChange={(v) => handleInputChange(cubeIdx, 3, v)} 
-                  onPaste={(e) => handlePaste(cubeIdx, e)}
-                  label="Right"
-                />
-              </div>
-              <div className="col-start-4 row-start-2">
-                <FaceInput 
-                  value={cubeFaces[4]} 
-                  onChange={(v) => handleInputChange(cubeIdx, 4, v)} 
-                  onPaste={(e) => handlePaste(cubeIdx, e)}
-                  label="Back"
-                />
-              </div>
-              <div className="col-start-2 row-start-3">
-                <FaceInput 
-                  value={cubeFaces[5]} 
-                  onChange={(v) => handleInputChange(cubeIdx, 5, v)} 
-                  onPaste={(e) => handlePaste(cubeIdx, e)}
-                  label="Bottom"
-                />
+      {/* 내부 스크롤 영역 */}
+      <div className="flex-1 w-full overflow-y-auto p-6 pb-32">
+        <div className="flex flex-col gap-8 w-full max-w-2xl mx-auto">
+          {puzzleData.map((cubeFaces, cubeIdx) => (
+            <div key={cubeIdx} className="bg-neutral-800 p-4 rounded-xl border border-neutral-700">
+              <h3 className="text-white font-bold mb-4 ml-2">Cube {cubeIdx + 1}</h3>
+              
+              <div className="grid grid-cols-4 gap-2 w-max mx-auto">
+                <div className="col-start-2">
+                  <FaceInput 
+                    value={cubeFaces[0]} 
+                    onChange={(v) => handleInputChange(cubeIdx, 0, v)} 
+                    onPaste={(e) => handlePaste(cubeIdx, e)}
+                    label="Top"
+                  />
+                </div>
+                <div className="col-start-1 row-start-2">
+                  <FaceInput 
+                    value={cubeFaces[1]} 
+                    onChange={(v) => handleInputChange(cubeIdx, 1, v)} 
+                    onPaste={(e) => handlePaste(cubeIdx, e)}
+                    label="Left"
+                  />
+                </div>
+                <div className="col-start-2 row-start-2">
+                  <FaceInput 
+                    value={cubeFaces[2]} 
+                    onChange={(v) => handleInputChange(cubeIdx, 2, v)} 
+                    onPaste={(e) => handlePaste(cubeIdx, e)}
+                    label="Front"
+                  />
+                </div>
+                <div className="col-start-3 row-start-2">
+                  <FaceInput 
+                    value={cubeFaces[3]} 
+                    onChange={(v) => handleInputChange(cubeIdx, 3, v)} 
+                    onPaste={(e) => handlePaste(cubeIdx, e)}
+                    label="Right"
+                  />
+                </div>
+                <div className="col-start-4 row-start-2">
+                  <FaceInput 
+                    value={cubeFaces[4]} 
+                    onChange={(v) => handleInputChange(cubeIdx, 4, v)} 
+                    onPaste={(e) => handlePaste(cubeIdx, e)}
+                    label="Back"
+                  />
+                </div>
+                <div className="col-start-2 row-start-3">
+                  <FaceInput 
+                    value={cubeFaces[5]} 
+                    onChange={(v) => handleInputChange(cubeIdx, 5, v)} 
+                    onPaste={(e) => handlePaste(cubeIdx, e)}
+                    label="Bottom"
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       <button 
@@ -825,7 +828,8 @@ const CustomPuzzleEditor = ({ onStart, onBack }: { onStart: (data: string[][]) =
 // --- HomeScreen Component ---
 const HomeScreen = ({ onStart, onCustom }: { onStart: (data: string[][]) => void, onCustom: () => void }) => {
   return (
-    <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center p-6 space-y-12 touch-none overscroll-none">
+    // [수정] fixed inset-0, h-[100dvh], overflow-hidden으로 스크롤 고정
+    <div className="fixed inset-0 h-[100dvh] w-full bg-neutral-900 overflow-hidden touch-none overscroll-none flex flex-col items-center justify-center p-6 space-y-12">
       <div className="text-center space-y-2 animate-fade-in-up">
         <h1 className="text-5xl md:text-7xl font-black text-white tracking-widest drop-shadow-2xl" style={{ fontFamily: 'Impact, sans-serif' }}>
           INSTANT<br/>INSANITY
@@ -990,7 +994,8 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
   };
 
   return (
-    <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center overflow-hidden touch-none overscroll-none">
+    // [수정] fixed inset-0, h-[100dvh], overflow-hidden으로 스크롤 고정
+    <div className="fixed inset-0 h-[100dvh] w-full bg-neutral-900 overflow-hidden touch-none overscroll-none flex flex-col items-center justify-center">
       
       <div className="absolute top-2 left-2 text-xs text-neutral-600 font-mono z-10 select-none">
         {APP_VERSION}
