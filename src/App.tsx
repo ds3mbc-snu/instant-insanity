@@ -4,57 +4,58 @@ import { RotateCcw, Home, Play, Settings, Grid3X3, ChevronLeft, ChevronRight, Ch
 // ==========================================
 // 1. 상수 및 데이터 정의
 // ==========================================
-const APP_VERSION = "v1.0.10"; // [수정] 버전 업데이트
+const APP_VERSION = "v1.0.12"; 
 const CUBE_SIZE = 100;
 const GAP = 10;
 const DRAG_SENSITIVITY = 0.8; 
 
+// 빨강, 노랑, 초록, 보라 조합
 const COLORS: Record<string, string> = {
-  R: 'bg-orange-600', 
-  G: 'bg-emerald-600',   
-  B: 'bg-blue-700',    
+  R: 'bg-red-600',    
+  G: 'bg-green-600',  
+  P: 'bg-purple-600', 
   Y: 'bg-yellow-400', 
   X: 'bg-neutral-700 border-neutral-600',
 };
 
 const GRAPH_COLORS: Record<string, string> = {
-  R: '#ea580c', 
-  G: '#059669', 
-  B: '#1d4ed8', 
+  R: '#dc2626', 
+  G: '#16a34a', 
+  P: '#9333ea', 
   Y: '#facc15', 
 };
 
 const INPUT_COLORS: Record<string, string> = {
-  R: 'bg-orange-600 text-white',
-  G: 'bg-emerald-600 text-white',
-  B: 'bg-blue-700 text-white',
+  R: 'bg-red-600 text-white',
+  G: 'bg-green-600 text-white',
+  P: 'bg-purple-600 text-white',
   Y: 'bg-yellow-400 text-black', 
   DEFAULT: 'bg-neutral-800 text-neutral-400 border-neutral-600', 
 };
 
-// [Hex Code Logic] R:00, G:01, B:10, Y:11
-const COLOR_TO_BIT: Record<string, number> = { 'R': 0, 'G': 1, 'B': 2, 'Y': 3, 'X': 0 };
-const BIT_TO_COLOR = ['R', 'G', 'B', 'Y'];
+const COLOR_TO_BIT: Record<string, number> = { 'R': 0, 'G': 1, 'P': 2, 'Y': 3, 'X': 0 };
+const BIT_TO_COLOR = ['R', 'G', 'P', 'Y'];
 
+// [수정] Puzzle 1 데이터 정확한 값으로 업데이트
 const PUZZLE_1 = [
-  ['B', 'R', 'Y', 'G', 'B', 'R'], 
-  ['R', 'R', 'Y', 'B', 'G', 'Y'], 
-  ['G', 'B', 'B', 'R', 'Y', 'G'], 
-  ['B', 'G', 'Y', 'R', 'G', 'Y'], 
+  ['P', 'G', 'Y', 'R', 'G', 'R'], // Cube 1
+  ['R', 'G', 'G', 'G', 'P', 'Y'], // Cube 2 (교정 완료)
+  ['G', 'Y', 'P', 'R', 'P', 'Y'], // Cube 3
+  ['P', 'G', 'R', 'P', 'Y', 'R'], // Cube 4
 ];
 
 const PUZZLE_2 = [
-  ['R', 'B', 'G', 'Y', 'R', 'G'],
-  ['Y', 'R', 'B', 'R', 'G', 'Y'],
-  ['G', 'Y', 'R', 'B', 'Y', 'B'],
-  ['B', 'G', 'Y', 'G', 'R', 'R'],
+  ['R', 'P', 'G', 'Y', 'R', 'G'],
+  ['Y', 'R', 'P', 'R', 'G', 'Y'],
+  ['G', 'Y', 'R', 'P', 'Y', 'P'],
+  ['P', 'G', 'Y', 'G', 'R', 'R'],
 ];
 
 const PUZZLE_3 = [
-  ['Y', 'G', 'R', 'B', 'G', 'R'],
-  ['R', 'B', 'G', 'Y', 'R', 'Y'],
-  ['G', 'Y', 'B', 'R', 'Y', 'B'],
-  ['B', 'R', 'Y', 'G', 'B', 'G'],
+  ['Y', 'G', 'R', 'P', 'G', 'R'],
+  ['R', 'P', 'G', 'Y', 'R', 'Y'],
+  ['G', 'Y', 'P', 'R', 'Y', 'P'],
+  ['P', 'R', 'Y', 'G', 'P', 'G'],
 ];
 
 const PUZZLE_CUSTOM_DEFAULT = [
@@ -88,26 +89,20 @@ interface PlatformProps {
 // ==========================================
 const IDENTITY_MATRIX = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 
-// [추가] 시드 생성 (Encode): 4x6 배열 -> 12자리 Hex
 const generateSeed = (data: string[][]): string => {
   let seed = "";
   for (const cube of data) {
     let val = 0;
-    // 6면을 순회하며 비트 압축 (각 면당 2비트)
-    // 순서: Top(0) -> ... -> Bottom(5)
-    // val = (c0<<10) | (c1<<8) ...
     for (let i = 0; i < 6; i++) {
-      const colorChar = cube[i] || 'R'; // 빈값은 R(00)로 처리
+      const colorChar = cube[i] || 'R'; 
       const bit = COLOR_TO_BIT[colorChar] || 0;
       val = (val << 2) | bit;
     }
-    // 12비트 -> 3자리 Hex (000 ~ FFF)
     seed += val.toString(16).toUpperCase().padStart(3, '0');
   }
   return seed;
 };
 
-// [추가] 시드 파싱 (Decode): 12자리 Hex -> 4x6 배열
 const parseSeed = (seed: string): string[][] | null => {
   const cleanSeed = seed.replace(/[^0-9A-F]/gi, '').toUpperCase();
   if (cleanSeed.length !== 12) return null;
@@ -118,9 +113,8 @@ const parseSeed = (seed: string): string[][] | null => {
       const chunk = cleanSeed.slice(i * 3, (i + 1) * 3);
       const val = parseInt(chunk, 16);
       const faces: string[] = [];
-      // 12비트를 2비트씩 쪼개서 색상 복원 (상위 비트부터)
       for (let j = 5; j >= 0; j--) {
-        const bit = (val >> (j * 2)) & 3; // 11(binary) masking
+        const bit = (val >> (j * 2)) & 3; 
         faces.push(BIT_TO_COLOR[bit]);
       }
       result.push(faces);
@@ -265,17 +259,16 @@ const HintPanel = ({
 }) => {
   const solution = useMemo(() => solveGraph(puzzleData), [puzzleData]);
 
-  const nodes = ['R', 'G', 'B', 'Y'];
+  const nodes = ['R', 'G', 'P', 'Y'];
   const nodePos = {
     R: { x: 50, y: 50 },
     G: { x: 250, y: 50 },
-    B: { x: 250, y: 250 },
+    P: { x: 250, y: 250 },
     Y: { x: 50, y: 250 },
   };
 
   const renderEdges = (edges: Edge[], highlight: boolean = false, type: 'g1'|'g2'|'none' = 'none') => {
     return edges.map((e, i) => {
-      // [수정] 노드 순서를 정렬하여 커브 방향 일관성 확보 (겹침 방지)
       let u = e.u;
       let v = e.v;
       if (nodes.indexOf(u) > nodes.indexOf(v)) {
@@ -287,14 +280,13 @@ const HintPanel = ({
       if(!p1 || !p2) return null;
 
       const isLoop = e.u === e.v;
-      const offset = (e.cubeIdx - 1.5) * 40; // Curve magnitude
+      const offset = (e.cubeIdx - 1.5) * 40; 
       
       let pathD = '';
       let labelX = 0;
       let labelY = 0;
 
       if (isLoop) {
-        // Self Loop: 바깥쪽으로 그려지도록 방향 동적 계산
         let dirX = 0;
         let dirY = 0;
         if (p1.x < 150) dirX = -1; else dirX = 1;
@@ -314,7 +306,6 @@ const HintPanel = ({
         labelY = 0.25 * p1.y + 0.375 * (c1y + c2y);
 
       } else {
-        // Quadratic Bezier: 법선 벡터를 이용한 정확한 곡선 제어
         const mx = (p1.x + p2.x) / 2;
         const my = (p1.y + p2.y) / 2;
         const dx = p2.x - p1.x;
@@ -340,7 +331,7 @@ const HintPanel = ({
       return (
         <g key={i}>
           <path d={pathD} stroke={strokeColor} strokeWidth={strokeWidth} fill="none" opacity={opacity} />
-          {highlight && ( // [수정] !isLoop 제거하여 루프에도 라벨 표시
+          {highlight && ( 
              <g>
                <circle cx={labelX} cy={labelY} r="9" fill={strokeColor} />
                <text x={labelX} y={labelY} dy="4" fill="white" fontSize="12" fontWeight="bold" textAnchor="middle">
@@ -538,7 +529,7 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
     if (diffX === 0) return;
 
     onRotate(diffX * DRAG_SENSITIVITY);
-    startX.current = e.clientX; // 기준점 갱신
+    startX.current = e.clientX; 
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
@@ -563,15 +554,19 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
         height: '320px',
         cursor: 'grab', 
         touchAction: 'none',
+        pointerEvents: 'none', // 컨테이너 터치 무시하여 하단 큐브 면 노출
         zIndex: 0, 
       }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerUp}
     >
-      <div className="absolute w-full h-full rounded-full bg-neutral-700 border-4 border-neutral-600 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] flex items-center justify-center pointer-events-none">
-         <div className="w-2/3 h-2/3 rounded-full border-2 border-neutral-600/50 border-dashed" />
+      <div 
+        className="absolute w-full h-full rounded-full bg-neutral-700 border-4 border-neutral-600 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] flex items-center justify-center"
+        style={{ pointerEvents: 'auto', cursor: 'grab' }} 
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerUp}
+      >
+         <div className="w-2/3 h-2/3 rounded-full border-2 border-neutral-600/50 border-dashed pointer-events-none" />
       </div>
       <div className="absolute w-full h-full rounded-full bg-neutral-800 translate-z-[-10px] pointer-events-none" />
       <div className="absolute w-full h-full rounded-full bg-neutral-800 translate-z-[-20px] shadow-xl pointer-events-none" />
@@ -597,7 +592,7 @@ const Cube = ({
 }) => {
   const startPos = useRef({ x: 0, y: 0 });
   const [currentDragAngle, setCurrentDragAngle] = useState<{ axis: 'x' | 'y' | 'z', val: number } | null>(null);
-  const [isDragging, setIsDragging] = useState(false); // UI 상태용
+  const [isDragging, setIsDragging] = useState(false); 
   
   const activeAxis = useRef<'x' | 'y' | 'z' | null>(null);
   const rotationSign = useRef(1);
@@ -757,6 +752,7 @@ const Cube = ({
         transform: `translateY(${(id - 1.5) * (CUBE_SIZE + GAP)}px) matrix3d(${displayMatrix.join(',')})`,
         transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
         zIndex: isDragging ? 100 : baseZIndex, 
+        pointerEvents: 'none' 
       }}
     >
       <CubeFace index={0} color={colors[0]} transform={`rotateX(90deg) translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} />
@@ -786,7 +782,8 @@ const CubeFace = ({
         transform, 
         backfaceVisibility: 'hidden', 
         WebkitBackfaceVisibility: 'hidden',
-        outline: '2px solid black'
+        outline: '2px solid black',
+        pointerEvents: 'auto' 
       }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -798,7 +795,6 @@ const CubeFace = ({
   );
 };
 
-// --- FaceInput for Editor ---
 const FaceInput = ({ value, onChange, label, onPaste }: { value: string, onChange: (v: string) => void, label: string, onPaste?: (e: React.ClipboardEvent<HTMLInputElement>) => void }) => {
   const style = INPUT_COLORS[value] || INPUT_COLORS.DEFAULT;
   
@@ -817,7 +813,6 @@ const FaceInput = ({ value, onChange, label, onPaste }: { value: string, onChang
   );
 };
 
-// --- CustomPuzzleEditor Component ---
 const CustomPuzzleEditor = ({ onStart, onBack }: { onStart: (data: string[][]) => void, onBack: () => void }) => {
   const [puzzleData, setPuzzleData] = useState<string[][]>(
     PRESET_PUZZLES.custom.map(row => [...row])
@@ -971,7 +966,6 @@ const CustomPuzzleEditor = ({ onStart, onBack }: { onStart: (data: string[][]) =
   );
 };
 
-// --- HomeScreen Component ---
 const HomeScreen = ({ onStart, onCustom }: { onStart: (data: string[][]) => void, onCustom: () => void }) => {
   return (
     <div className="fixed inset-0 h-[100dvh] w-full bg-neutral-900 overflow-hidden touch-none overscroll-none flex flex-col items-center justify-center p-6 space-y-12">
@@ -987,10 +981,9 @@ const HomeScreen = ({ onStart, onCustom }: { onStart: (data: string[][]) => void
       </div>
 
       <div className="w-full max-w-sm space-y-4">
-        {/* Puzzle 1 */}
         <button 
           onClick={() => onStart(PRESET_PUZZLES.standard)}
-          className="w-full group relative overflow-hidden rounded-xl bg-blue-600 p-4 transition-all hover:bg-blue-500 active:scale-95 shadow-lg shadow-blue-900/20"
+          className="w-full group relative overflow-hidden rounded-xl bg-red-600 p-4 transition-all hover:bg-red-500 active:scale-95 shadow-lg shadow-red-900/20"
         >
           <div className="flex items-center justify-center gap-3 relative z-10">
             <Grid3X3 className="w-6 h-6 text-white" />
@@ -998,7 +991,6 @@ const HomeScreen = ({ onStart, onCustom }: { onStart: (data: string[][]) => void
           </div>
         </button>
         
-        {/* Puzzle 2 */}
         <button 
           onClick={() => onStart(PRESET_PUZZLES.hard)}
           className="w-full rounded-xl bg-orange-600 p-4 transition-all hover:bg-orange-500 active:scale-95 shadow-lg shadow-orange-900/20 flex items-center justify-center gap-3"
@@ -1007,7 +999,6 @@ const HomeScreen = ({ onStart, onCustom }: { onStart: (data: string[][]) => void
           <span className="text-lg font-bold text-white">Puzzle 2</span>
         </button>
 
-        {/* Puzzle 3 */}
         <button 
           onClick={() => onStart(PRESET_PUZZLES.expert)}
           className="w-full rounded-xl bg-purple-600 p-4 transition-all hover:bg-purple-500 active:scale-95 shadow-lg shadow-purple-900/20 flex items-center justify-center gap-3"
@@ -1016,7 +1007,6 @@ const HomeScreen = ({ onStart, onCustom }: { onStart: (data: string[][]) => void
           <span className="text-lg font-bold text-white">Puzzle 3</span>
         </button>
 
-        {/* Custom */}
         <button 
           onClick={onCustom}
           className="w-full rounded-xl bg-neutral-800 p-4 border-2 border-neutral-700 flex items-center justify-center gap-3 hover:bg-neutral-700 active:scale-95 transition-all"
@@ -1039,7 +1029,6 @@ const HomeScreen = ({ onStart, onCustom }: { onStart: (data: string[][]) => void
   );
 };
 
-// --- GameScreen Component ---
 const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: () => void }) => {
   const [cubeMatrices, setCubeMatrices] = useState<number[][]>(
     puzzleData.map(() => [...IDENTITY_MATRIX])
@@ -1052,7 +1041,6 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
   const [hintStep, setHintStep] = useState(1);
   const [toastMsg, setToastMsg] = useState<string | null>(null); 
 
-  // [수정] document 레벨 스크롤 방지 (Safari 대응)
   useEffect(() => {
     const preventScroll = (e: TouchEvent) => {
       const target = e.target as HTMLElement;
@@ -1092,9 +1080,9 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
     const allRotations = getAllRotations();
     
     const getLocalAxisVector = (pairIdx: number) => {
-      if (pairIdx === 0) return [0, 1, 0, 0]; // Y
-      if (pairIdx === 1) return [1, 0, 0, 0]; // X
-      if (pairIdx === 2) return [0, 0, 1, 0]; // Z
+      if (pairIdx === 0) return [0, 1, 0, 0]; 
+      if (pairIdx === 1) return [1, 0, 0, 0]; 
+      if (pairIdx === 2) return [0, 0, 1, 0]; 
       return [0, 0, 0, 0];
     };
 
@@ -1164,7 +1152,6 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
   return (
     <div className="fixed inset-0 h-[100dvh] w-full bg-neutral-900 overflow-hidden touch-none overscroll-none flex flex-col items-center justify-center">
       
-      {/* [수정] 글로벌 스타일 주입 - 사파리 스크롤 방지 */}
       <style>{`
         html, body, #root {
           width: 100%;
@@ -1204,16 +1191,12 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
         isOpen={showMap}
       />
 
-      {/* 3D Viewport - [수정] 오버레이가 열려도 위치 고정 */}
-      <div 
-        className="relative w-64 h-96 perspective-container transition-transform duration-300" 
-        style={{ perspective: '1200px' }}
-      >
+      <div className="relative w-64 h-96 perspective-container transition-transform duration-300" style={{ perspective: '1200px' }}>
         <div className="w-full h-full relative preserve-3d flex items-center justify-center" style={{ transform: 'rotateX(-20deg) rotateY(-30deg)' }}>
           <div className="w-full h-full relative preserve-3d flex items-center justify-center" 
                style={{ transform: `rotateY(${towerRotation}deg)`, transition: isTowerDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' }}>
             
-            {/* [수정] Platform 먼저 렌더링 (zIndex 하위) */}
+            {/* Platform 먼저 렌더링 (터치 가림 방지) */}
             <Platform onRotateStart={() => setIsTowerDragging(true)} onRotate={(delta) => setTowerRotation(prev => prev + delta)} onRotateEnd={() => { setIsTowerDragging(false); setTowerRotation(prev => Math.round(prev / 90) * 90); }} />
 
             {puzzleData.map((colors, idx) => (
@@ -1224,7 +1207,6 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
                 matrix={cubeMatrices[idx]} 
                 towerRotation={towerRotation} 
                 onRotate={handleRotate} 
-                // [수정] 윗쪽 큐브가 더 높은 zIndex를 가져 터치 우선순위 확보
                 baseZIndex={(puzzleData.length - idx) * 10}
               />
             ))}
@@ -1262,7 +1244,6 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
   );
 };
 
-// --- 메인 앱 ---
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<'home' | 'game' | 'custom'>('home');
   const [activePuzzle, setActivePuzzle] = useState<string[][] | null>(null);
