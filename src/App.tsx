@@ -4,12 +4,11 @@ import { RotateCcw, Home, Play, Settings, Grid3X3, ChevronLeft, ChevronRight, Ch
 // ==========================================
 // 1. 상수 및 데이터 정의
 // ==========================================
-const APP_VERSION = "v1.0.12"; 
+const APP_VERSION = "v1.0.14"; // [수정] 길게 누르기(Long Press) 로직 적용
 const CUBE_SIZE = 100;
 const GAP = 10;
 const DRAG_SENSITIVITY = 0.8; 
 
-// 빨강, 노랑, 초록, 보라 조합
 const COLORS: Record<string, string> = {
   R: 'bg-red-600',    
   G: 'bg-green-600',  
@@ -36,12 +35,11 @@ const INPUT_COLORS: Record<string, string> = {
 const COLOR_TO_BIT: Record<string, number> = { 'R': 0, 'G': 1, 'P': 2, 'Y': 3, 'X': 0 };
 const BIT_TO_COLOR = ['R', 'G', 'P', 'Y'];
 
-// [수정] Puzzle 1 데이터 정확한 값으로 업데이트
 const PUZZLE_1 = [
-  ['P', 'G', 'Y', 'R', 'G', 'R'], // Cube 1
-  ['R', 'G', 'G', 'G', 'P', 'Y'], // Cube 2 (교정 완료)
-  ['G', 'Y', 'P', 'R', 'P', 'Y'], // Cube 3
-  ['P', 'G', 'R', 'P', 'Y', 'R'], // Cube 4
+  ['P', 'G', 'Y', 'R', 'G', 'R'], 
+  ['R', 'G', 'G', 'G', 'P', 'Y'], 
+  ['G', 'Y', 'P', 'R', 'P', 'Y'], 
+  ['P', 'G', 'R', 'P', 'Y', 'R'], 
 ];
 
 const PUZZLE_2 = [
@@ -554,7 +552,7 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
         height: '320px',
         cursor: 'grab', 
         touchAction: 'none',
-        pointerEvents: 'none', // 컨테이너 터치 무시하여 하단 큐브 면 노출
+        pointerEvents: 'none', 
         zIndex: 0, 
       }}
     >
@@ -813,7 +811,17 @@ const FaceInput = ({ value, onChange, label, onPaste }: { value: string, onChang
   );
 };
 
-const CustomPuzzleEditor = ({ onStart, onBack }: { onStart: (data: string[][]) => void, onBack: () => void }) => {
+const CustomPuzzleEditor = ({ 
+  onStart, 
+  onBack, 
+  onSecretPressStart, 
+  onSecretPressEnd 
+}: { 
+  onStart: (data: string[][]) => void, 
+  onBack: () => void, 
+  onSecretPressStart: () => void,
+  onSecretPressEnd: () => void
+}) => {
   const [puzzleData, setPuzzleData] = useState<string[][]>(
     PRESET_PUZZLES.custom.map(row => [...row])
   );
@@ -866,6 +874,16 @@ const CustomPuzzleEditor = ({ onStart, onBack }: { onStart: (data: string[][]) =
 
   return (
     <div className="fixed inset-0 h-[100dvh] w-full bg-neutral-900 overflow-hidden overscroll-none touch-none flex flex-col">
+      {/* [수정] 버전 영역 이벤트 변경 (길게 누르기) */}
+      <div 
+        className="absolute top-2 left-2 text-xs text-neutral-600 font-mono z-10 select-none cursor-default touch-none" 
+        onPointerDown={onSecretPressStart}
+        onPointerUp={onSecretPressEnd}
+        onPointerLeave={onSecretPressEnd}
+      >
+        {APP_VERSION}
+      </div>
+
       <div className="w-full flex-none flex items-center justify-between p-6">
         <button onClick={onBack} className="p-2 text-white hover:bg-white/10 rounded-full">
           <ChevronLeft size={32} />
@@ -966,10 +984,26 @@ const CustomPuzzleEditor = ({ onStart, onBack }: { onStart: (data: string[][]) =
   );
 };
 
-const HomeScreen = ({ onStart, onCustom }: { onStart: (data: string[][]) => void, onCustom: () => void }) => {
+const HomeScreen = ({ 
+  onStart, 
+  onCustom, 
+  onSecretPressStart, 
+  onSecretPressEnd 
+}: { 
+  onStart: (data: string[][]) => void, 
+  onCustom: () => void, 
+  onSecretPressStart: () => void,
+  onSecretPressEnd: () => void
+}) => {
   return (
     <div className="fixed inset-0 h-[100dvh] w-full bg-neutral-900 overflow-hidden touch-none overscroll-none flex flex-col items-center justify-center p-6 space-y-12">
-      <div className="absolute top-2 left-2 text-xs text-neutral-600 font-mono z-10 select-none">
+      {/* [수정] 버전 영역 이벤트 변경 (길게 누르기) */}
+      <div 
+        className="absolute top-2 left-2 text-xs text-neutral-600 font-mono z-10 select-none cursor-default touch-none" 
+        onPointerDown={onSecretPressStart}
+        onPointerUp={onSecretPressEnd}
+        onPointerLeave={onSecretPressEnd}
+      >
         {APP_VERSION}
       </div>
 
@@ -1029,7 +1063,21 @@ const HomeScreen = ({ onStart, onCustom }: { onStart: (data: string[][]) => void
   );
 };
 
-const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: () => void }) => {
+const GameScreen = ({ 
+  puzzleData, 
+  onHome, 
+  onSecretPressStart, 
+  onSecretPressEnd,
+  isInstructorMode,
+  showToast
+}: { 
+  puzzleData: string[][]; 
+  onHome: () => void;
+  onSecretPressStart: () => void;
+  onSecretPressEnd: () => void;
+  isInstructorMode: boolean;
+  showToast: (m: string) => void;
+}) => {
   const [cubeMatrices, setCubeMatrices] = useState<number[][]>(
     puzzleData.map(() => [...IDENTITY_MATRIX])
   );
@@ -1039,7 +1087,6 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
   const [showHint, setShowHint] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [hintStep, setHintStep] = useState(1);
-  const [toastMsg, setToastMsg] = useState<string | null>(null); 
 
   useEffect(() => {
     const preventScroll = (e: TouchEvent) => {
@@ -1051,6 +1098,12 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
     document.addEventListener('touchmove', preventScroll, { passive: false });
     return () => document.removeEventListener('touchmove', preventScroll);
   }, []);
+
+  useEffect(() => {
+    if (!isInstructorMode) {
+      setShowHint(false);
+    }
+  }, [isInstructorMode]);
 
   const handleRotate = (id: number, newMatrix: number[]) => {
     setCubeMatrices(prev => {
@@ -1071,8 +1124,7 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
   const handleShare = () => {
     const seed = generateSeed(puzzleData);
     navigator.clipboard.writeText(seed).then(() => {
-      setToastMsg(`Seed Copied: ${seed}`);
-      setTimeout(() => setToastMsg(null), 2000);
+      showToast(`Seed Copied: ${seed}`);
     });
   };
 
@@ -1166,15 +1218,15 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
         }
       `}</style>
 
-      <div className="absolute top-2 left-2 text-xs text-neutral-600 font-mono z-10 select-none">
+      {/* [수정] 버전 영역 이벤트 변경 (길게 누르기) */}
+      <div 
+        className="absolute top-2 left-2 text-xs text-neutral-600 font-mono z-10 select-none cursor-default touch-none" 
+        onPointerDown={onSecretPressStart}
+        onPointerUp={onSecretPressEnd}
+        onPointerLeave={onSecretPressEnd}
+      >
         {APP_VERSION}
       </div>
-
-      {toastMsg && (
-        <div className="absolute top-12 left-1/2 -translate-x-1/2 bg-neutral-800/90 text-white px-4 py-2 rounded-full shadow-lg z-50 text-sm animate-fade-in-up">
-          {toastMsg}
-        </div>
-      )}
 
       <HintPanel 
         puzzleData={puzzleData} 
@@ -1196,7 +1248,6 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
           <div className="w-full h-full relative preserve-3d flex items-center justify-center" 
                style={{ transform: `rotateY(${towerRotation}deg)`, transition: isTowerDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' }}>
             
-            {/* Platform 먼저 렌더링 (터치 가림 방지) */}
             <Platform onRotateStart={() => setIsTowerDragging(true)} onRotate={(delta) => setTowerRotation(prev => prev + delta)} onRotateEnd={() => { setIsTowerDragging(false); setTowerRotation(prev => Math.round(prev / 90) * 90); }} />
 
             {puzzleData.map((colors, idx) => (
@@ -1227,9 +1278,11 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
           <MapIcon size={24} />
         </button>
 
-        <button onClick={() => { setShowHint(!showHint); if (!showHint) setShowMap(false); }} className="w-14 h-14 bg-yellow-500 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform border-2 border-yellow-400 hover:bg-yellow-400 text-black">
-          <Lightbulb size={24} fill="currentColor" />
-        </button>
+        {isInstructorMode && (
+          <button onClick={() => { setShowHint(!showHint); if (!showHint) setShowMap(false); }} className="w-14 h-14 bg-yellow-500 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform border-2 border-yellow-400 hover:bg-yellow-400 text-black">
+            <Lightbulb size={24} fill="currentColor" />
+          </button>
+        )}
 
         <button onClick={handleShare} className="w-14 h-14 bg-emerald-600 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform border-2 border-emerald-500 hover:bg-emerald-500">
           <Share2 size={24} />
@@ -1244,9 +1297,40 @@ const GameScreen = ({ puzzleData, onHome }: { puzzleData: string[][], onHome: ()
   );
 };
 
+// --- 메인 앱 ---
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<'home' | 'game' | 'custom'>('home');
   const [activePuzzle, setActivePuzzle] = useState<string[][] | null>(null);
+  
+  const [isInstructorMode, setIsInstructorMode] = useState(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  // [수정] 길게 누르기(Long Press) 타이머 참조
+  const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 2000);
+  };
+
+  // [추가] 2초간 누르고 있으면 토글
+  const handleSecretPressStart = () => {
+    pressTimerRef.current = setTimeout(() => {
+      setIsInstructorMode(prev => {
+        const next = !prev;
+        showToast(next ? "강의자 모드: 힌트 버튼이 활성화되었습니다." : "강의자 모드: 힌트 버튼을 숨겼습니다.");
+        return next;
+      });
+    }, 2000); // 2초 설정
+  };
+
+  // [추가] 2초 전에 손을 떼면 취소
+  const handleSecretPressEnd = () => {
+    if (pressTimerRef.current) {
+      clearTimeout(pressTimerRef.current);
+      pressTimerRef.current = null;
+    }
+  };
 
   const handleStartGame = (data: string[][]) => {
     setActivePuzzle(data);
@@ -1255,9 +1339,38 @@ export default function App() {
 
   return (
     <>
-      {currentScreen === 'home' && <HomeScreen onStart={handleStartGame} onCustom={() => setCurrentScreen('custom')} />}
-      {currentScreen === 'custom' && <CustomPuzzleEditor onStart={handleStartGame} onBack={() => setCurrentScreen('home')} />}
-      {currentScreen === 'game' && activePuzzle && <GameScreen puzzleData={activePuzzle} onHome={() => { setActivePuzzle(null); setCurrentScreen('home'); }} />}
+      {toastMsg && (
+        <div className="fixed top-12 left-1/2 -translate-x-1/2 bg-neutral-800/90 text-white px-4 py-2 rounded-full shadow-lg z-[9999] text-sm animate-fade-in-up">
+          {toastMsg}
+        </div>
+      )}
+
+      {currentScreen === 'home' && (
+        <HomeScreen 
+          onStart={handleStartGame} 
+          onCustom={() => setCurrentScreen('custom')} 
+          onSecretPressStart={handleSecretPressStart}
+          onSecretPressEnd={handleSecretPressEnd}
+        />
+      )}
+      {currentScreen === 'custom' && (
+        <CustomPuzzleEditor 
+          onStart={handleStartGame} 
+          onBack={() => setCurrentScreen('home')} 
+          onSecretPressStart={handleSecretPressStart}
+          onSecretPressEnd={handleSecretPressEnd}
+        />
+      )}
+      {currentScreen === 'game' && activePuzzle && (
+        <GameScreen 
+          puzzleData={activePuzzle} 
+          onHome={() => { setActivePuzzle(null); setCurrentScreen('home'); }} 
+          onSecretPressStart={handleSecretPressStart}
+          onSecretPressEnd={handleSecretPressEnd}
+          isInstructorMode={isInstructorMode}
+          showToast={showToast}
+        />
+      )}
     </>
   );
 }
