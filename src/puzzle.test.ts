@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { generateSeed, parseSeed } from './puzzle';
+import {
+  generateSeed,
+  getIncompleteFaces,
+  isCompletePuzzle,
+  normalizePuzzleColorInput,
+  parseSeed,
+} from './puzzle';
 
 const PUZZLE = [
   ['P', 'G', 'Y', 'R', 'G', 'R'],
@@ -25,5 +31,37 @@ describe('puzzle seed', () => {
 
   it('rejects a seed that does not contain twelve hexadecimal digits', () => {
     expect(parseSeed('1234')).toBeNull();
+  });
+
+  it('rejects seed generation for incomplete or unsupported colors', () => {
+    const incompletePuzzle = PUZZLE.map((faces) => [...faces]);
+    incompletePuzzle[0][0] = '';
+    const unsupportedPuzzle = PUZZLE.map((faces) => [...faces]);
+    unsupportedPuzzle[0][0] = 'X';
+
+    expect(() => generateSeed(incompletePuzzle)).toThrow();
+    expect(() => generateSeed(unsupportedPuzzle)).toThrow();
+  });
+});
+
+describe('custom puzzle validation', () => {
+  it('normalizes supported colors and rejects every other value', () => {
+    expect(normalizePuzzleColorInput('r')).toBe('R');
+    expect(normalizePuzzleColorInput('Y')).toBe('Y');
+    expect(normalizePuzzleColorInput('X')).toBe('');
+    expect(normalizePuzzleColorInput('blue')).toBe('');
+  });
+
+  it('reports the exact incomplete face locations', () => {
+    const puzzle = PUZZLE.map((faces) => [...faces]);
+    puzzle[0][2] = '';
+    puzzle[3][5] = 'X';
+
+    expect(isCompletePuzzle(puzzle)).toBe(false);
+    expect(getIncompleteFaces(puzzle)).toEqual([
+      { cubeIndex: 0, faceIndex: 2 },
+      { cubeIndex: 3, faceIndex: 5 },
+    ]);
+    expect(isCompletePuzzle(PUZZLE)).toBe(true);
   });
 });

@@ -1,6 +1,14 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { RotateCcw, Home, Play, Settings, Grid3X3, ChevronLeft, ChevronRight, Check, Lightbulb, X as XIcon, Map as MapIcon, Share2, Clipboard, ArrowDownToLine } from 'lucide-react';
-import { generateSeed, parseSeed } from './puzzle';
+import {
+  generateSeed,
+  getIncompleteFaces,
+  isCompletePuzzle,
+  isPuzzleColor,
+  normalizePuzzleColorInput,
+  parseSeed,
+  type IncompleteFace,
+} from './puzzle';
 import { orientGraphSolution, solveGraph, type Edge, type Subgraph } from './solver';
 import {
   IDENTITY_MATRIX,
@@ -23,7 +31,6 @@ const COLORS: Record<string, string> = {
   G: 'bg-green-600',  
   P: 'bg-purple-600', 
   Y: 'bg-yellow-400', 
-  X: 'bg-neutral-700 border-neutral-600',
 };
 
 const GRAPH_COLORS: Record<string, string> = {
@@ -40,6 +47,8 @@ const INPUT_COLORS: Record<string, string> = {
   Y: 'bg-yellow-400 text-black', 
   DEFAULT: 'bg-neutral-800 text-neutral-400 border-neutral-600', 
 };
+
+const FACE_LABELS = ['Top', 'Left', 'Front', 'Right', 'Back', 'Bottom'];
 
 const PUZZLE_1 = [
   ['P', 'G', 'Y', 'R', 'G', 'R'], 
@@ -82,6 +91,39 @@ interface PlatformProps {
   onRotateEnd: () => void;
 }
 
+const VersionBadge = ({
+  onPressStart,
+  onPressEnd,
+}: {
+  onPressStart: () => void;
+  onPressEnd: () => void;
+}) => (
+  <div
+    role="button"
+    tabIndex={0}
+    aria-label={`${APP_VERSION}. 강의자 모드를 전환하려면 2초간 누르세요.`}
+    className="absolute top-2 left-2 text-xs text-neutral-400 font-mono z-10 select-none cursor-default touch-none rounded-sm"
+    onPointerDown={onPressStart}
+    onPointerUp={onPressEnd}
+    onPointerLeave={onPressEnd}
+    onKeyDown={(event) => {
+      if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) {
+        event.preventDefault();
+        onPressStart();
+      }
+    }}
+    onKeyUp={(event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        onPressEnd();
+      }
+    }}
+    onBlur={onPressEnd}
+  >
+    {APP_VERSION}
+  </div>
+);
+
 // ==========================================
 // 4. 서브 컴포넌트 (UI Parts)
 // ==========================================
@@ -102,6 +144,22 @@ const HintPanel = ({
   setStep: (s: number) => void
 }) => {
   const solution = useMemo(() => solveGraph(puzzleData), [puzzleData]);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (isOpen) closeButtonRef.current?.focus();
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose]);
 
   const nodes = ['R', 'G', 'P', 'Y'];
   const nodePos = {
@@ -188,14 +246,18 @@ const HintPanel = ({
 
   return (
     <div 
+      role="dialog"
+      aria-labelledby="hint-panel-title"
+      aria-hidden={!isOpen}
+      inert={!isOpen}
       className={`fixed top-4 right-4 bottom-32 w-[80%] max-w-sm z-30 bg-neutral-900/95 backdrop-blur-xl border border-neutral-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-[120%]'}`}
     >
       <div className="flex items-center justify-between p-4 border-b border-neutral-700">
-        <h3 className="text-white font-bold flex items-center gap-2">
+        <h3 id="hint-panel-title" className="text-white font-bold flex items-center gap-2">
           <Lightbulb size={20} className="text-yellow-400" />
           Hint Mode
         </h3>
-        <button onClick={onClose} className="text-neutral-400 hover:text-white">
+        <button ref={closeButtonRef} aria-label="힌트 닫기" onClick={onClose} className="text-neutral-400 hover:text-white">
           <XIcon size={20} />
         </button>
       </div>
@@ -211,14 +273,14 @@ const HintPanel = ({
             {step === 1 && (
               <div className="w-full">
                 <p className="text-neutral-300 text-sm mb-2 text-center">Step 1: 전체 그래프 생성</p>
-                <p className="text-neutral-500 text-xs mb-4 text-center">각 큐브의 마주 보는 면을 연결합니다.</p>
+                <p className="text-neutral-400 text-xs mb-4 text-center">각 큐브의 마주 보는 면을 연결합니다.</p>
                 <svg width="100%" height="200" viewBox="0 0 300 300" className="mx-auto bg-neutral-800 rounded-lg">
                   {renderEdges(solution.allEdges, true)}
                   {nodes.map(n => (
                     <circle key={n} cx={nodePos[n as keyof typeof nodePos].x} cy={nodePos[n as keyof typeof nodePos].y} r="18" fill={GRAPH_COLORS[n]} stroke="white" strokeWidth="2" />
                   ))}
                   {nodes.map(n => (
-                    <text key={n+"t"} x={nodePos[n as keyof typeof nodePos].x} y={nodePos[n as keyof typeof nodePos].y} dy="5" textAnchor="middle" fill="white" fontWeight="bold">{n}</text>
+                    <text key={n+"t"} x={nodePos[n as keyof typeof nodePos].x} y={nodePos[n as keyof typeof nodePos].y} dy="5" textAnchor="middle" fill={n === 'G' || n === 'Y' ? 'black' : 'white'} fontWeight="bold">{n}</text>
                   ))}
                 </svg>
               </div>
@@ -260,7 +322,7 @@ const HintPanel = ({
                 </div>
                 <button 
                   onClick={() => onApply(solution.g1, solution.g2)}
-                  className="px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-full font-bold shadow-lg w-full flex items-center justify-center gap-2"
+                  className="px-6 py-3 bg-green-700 hover:bg-green-600 text-white rounded-full font-bold shadow-lg w-full flex items-center justify-center gap-2"
                 >
                   <Play size={18} fill="currentColor" />
                   Apply Solution
@@ -274,6 +336,7 @@ const HintPanel = ({
       {solution && (
         <div className="p-4 border-t border-neutral-700 flex justify-between">
           <button 
+            aria-label="이전 힌트 단계"
             onClick={() => setStep(Math.max(1, step - 1))}
             disabled={step === 1}
             className="p-2 rounded-full hover:bg-neutral-800 disabled:opacity-30 text-white transition-colors"
@@ -288,6 +351,7 @@ const HintPanel = ({
           </div>
 
           <button 
+            aria-label="다음 힌트 단계"
             onClick={() => setStep(Math.min(3, step + 1))}
             disabled={step === 3}
             className="p-2 rounded-full hover:bg-neutral-800 disabled:opacity-30 text-white transition-colors"
@@ -301,16 +365,37 @@ const HintPanel = ({
 };
 
 const PuzzleMapOverlay = ({ puzzleData, onClose, isOpen }: { puzzleData: string[][], onClose: () => void, isOpen: boolean }) => {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (isOpen) closeButtonRef.current?.focus();
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose]);
+
   return (
     <div 
+      role="dialog"
+      aria-labelledby="puzzle-map-title"
+      aria-hidden={!isOpen}
+      inert={!isOpen}
       className={`fixed top-4 left-4 bottom-32 w-[80%] max-w-sm z-30 bg-neutral-900/95 backdrop-blur-xl border border-neutral-700 rounded-2xl shadow-2xl overflow-y-auto flex flex-col gap-6 scrollbar-hide transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-[120%]'}`}
     >
        <div className="flex items-center justify-between border-b border-neutral-700 p-4 sticky top-0 bg-neutral-900/90 z-10">
-        <h3 className="text-white font-bold flex items-center gap-2">
+        <h3 id="puzzle-map-title" className="text-white font-bold flex items-center gap-2">
           <MapIcon size={18} className="text-blue-400" />
           Puzzle Map
         </h3>
-        <button onClick={onClose} className="text-neutral-400 hover:text-white">
+        <button ref={closeButtonRef} aria-label="퍼즐 맵 닫기" onClick={onClose} className="text-neutral-400 hover:text-white">
           <XIcon size={18} />
         </button>
       </div>
@@ -386,6 +471,15 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
     onRotateEnd();
   };
 
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+
+    event.preventDefault();
+    onRotateStart();
+    onRotate(event.key === 'ArrowLeft' ? -90 : 90);
+    onRotateEnd();
+  };
+
   const lastCubeIndex = 3; 
   const bottomCubeY = (lastCubeIndex - 1.5) * (CUBE_SIZE + GAP);
   const platformY = bottomCubeY + CUBE_SIZE / 2;
@@ -405,12 +499,16 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
       }}
     >
       <div 
+        role="group"
+        tabIndex={0}
+        aria-label="전체 큐브 받침대. 왼쪽 또는 오른쪽 방향키로 회전합니다."
         className="absolute w-full h-full rounded-full bg-neutral-700 border-4 border-neutral-600 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] flex items-center justify-center"
         style={{ pointerEvents: 'auto', cursor: 'grab' }} 
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
+        onKeyDown={handleKeyDown}
       >
          <div className="w-2/3 h-2/3 rounded-full border-2 border-neutral-600/50 border-dashed pointer-events-none" />
       </div>
@@ -581,6 +679,24 @@ const Cube = ({
     setCurrentDragAngle(null);
   };
 
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    const rotation = {
+      ArrowLeft: { axis: 'y' as const, angle: -90 },
+      ArrowRight: { axis: 'y' as const, angle: 90 },
+      ArrowUp: { axis: 'x' as const, angle: -90 },
+      ArrowDown: { axis: 'x' as const, angle: 90 },
+      q: { axis: 'z' as const, angle: -90 },
+      e: { axis: 'z' as const, angle: 90 },
+      Q: { axis: 'z' as const, angle: -90 },
+      E: { axis: 'z' as const, angle: 90 },
+    }[event.key];
+
+    if (!rotation) return;
+
+    event.preventDefault();
+    onRotate(id, multiplyMatrix(getRotationMatrix(rotation.axis, rotation.angle), matrix));
+  };
+
   let displayMatrix = matrix;
   if (isDragging && currentDragAngle) {
     const tempRot = getRotationMatrix(currentDragAngle.axis, currentDragAngle.val);
@@ -591,6 +707,9 @@ const Cube = ({
 
   return (
     <div 
+      role="group"
+      tabIndex={0}
+      aria-label={`Cube ${id + 1}. 방향키로 상하좌우 회전하고 Q 또는 E 키로 비틉니다.`}
       className="absolute cursor-grab active:cursor-grabbing touch-none"
       style={{
         width: `${CUBE_SIZE}px`,
@@ -601,6 +720,7 @@ const Cube = ({
         zIndex: isDragging ? 100 : baseZIndex, 
         pointerEvents: 'none' 
       }}
+      onKeyDown={handleKeyDown}
     >
       <CubeFace index={0} color={colors[0]} transform={`rotateX(90deg) translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} />
       <CubeFace index={1} color={colors[1]} transform={`rotateY(-90deg) translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} />
@@ -642,20 +762,38 @@ const CubeFace = ({
   );
 };
 
-const FaceInput = ({ value, onChange, label, onPaste }: { value: string, onChange: (v: string) => void, label: string, onPaste?: (e: React.ClipboardEvent<HTMLInputElement>) => void }) => {
+const FaceInput = ({
+  id,
+  value,
+  onChange,
+  label,
+  invalid,
+  onPaste,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  label: string;
+  invalid: boolean;
+  onPaste?: (event: React.ClipboardEvent<HTMLInputElement>) => void;
+}) => {
   const style = INPUT_COLORS[value] || INPUT_COLORS.DEFAULT;
   
   return (
     <div className="flex flex-col items-center gap-1">
       <input
+        id={id}
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onPaste={onPaste}
         maxLength={1}
-        className={`w-12 h-12 text-center text-xl font-bold uppercase rounded-md border-2 focus:outline-none focus:border-white transition-colors ${style}`}
+        aria-invalid={invalid}
+        className={`w-12 h-12 text-center text-xl font-bold uppercase rounded-md border-2 focus:outline-none focus:border-white transition-colors ${invalid ? 'border-red-400 ring-2 ring-red-500/40' : ''} ${style}`}
       />
-      <span className="text-[10px] text-neutral-500 uppercase">{label}</span>
+      <label htmlFor={id} className={`text-[10px] uppercase ${invalid ? 'text-red-300' : 'text-neutral-300'}`}>
+        {label}
+      </label>
     </div>
   );
 };
@@ -676,25 +814,56 @@ const CustomPuzzleEditor = ({
   );
 
   const [seedInput, setSeedInput] = useState(""); 
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: 'error' | 'success', message: string } | null>(null);
+
+  const incompleteFaces = getIncompleteFaces(puzzleData);
+  const incompleteFaceKeys = new Set(
+    incompleteFaces.map(({ cubeIndex, faceIndex }) => `${cubeIndex}-${faceIndex}`),
+  );
+  const isFaceInvalid = (cubeIndex: number, faceIndex: number) =>
+    showValidationErrors && incompleteFaceKeys.has(`${cubeIndex}-${faceIndex}`);
+
+  const describeIncompleteFaces = (faces: IncompleteFace[]) => {
+    const visibleFaces = faces
+      .slice(0, 6)
+      .map(({ cubeIndex, faceIndex }) => `Cube ${cubeIndex + 1} ${FACE_LABELS[faceIndex]}`);
+    const remainingCount = faces.length - visibleFaces.length;
+    return `미완성 면: ${visibleFaces.join(', ')}${remainingCount > 0 ? ` 외 ${remainingCount}곳` : ''}`;
+  };
+
+  const updatePuzzleData = (newData: string[][]) => {
+    const complete = isCompletePuzzle(newData);
+    setPuzzleData(newData);
+    setSeedInput(complete ? generateSeed(newData) : '');
+    if (complete) setShowValidationErrors(false);
+  };
 
   const handleInputChange = (cubeIndex: number, faceIndex: number, val: string) => {
-    const char = val.slice(-1).toUpperCase(); 
+    const color = normalizePuzzleColorInput(val);
     const newData = [...puzzleData];
     newData[cubeIndex] = [...newData[cubeIndex]];
-    newData[cubeIndex][faceIndex] = char;
-    setPuzzleData(newData);
-    setSeedInput(generateSeed(newData)); 
+    newData[cubeIndex][faceIndex] = color;
+    updatePuzzleData(newData);
+
+    if (val && !color) {
+      setFeedback({ type: 'error', message: '각 면에는 R, G, P, Y 중 하나만 입력할 수 있습니다.' });
+    } else {
+      setFeedback(null);
+    }
   };
 
   const handlePaste = (cubeIndex: number, e: React.ClipboardEvent<HTMLInputElement>) => {
-    const pastedText = e.clipboardData.getData('text').replace(/[^a-zA-Z]/g, '').toUpperCase();
-    
-    if (pastedText.length === 6) {
-      e.preventDefault(); 
+    const pastedText = e.clipboardData.getData('text').trim().toUpperCase();
+    e.preventDefault();
+
+    if (pastedText.length === 6 && [...pastedText].every(isPuzzleColor)) {
       const newData = [...puzzleData];
       newData[cubeIndex] = pastedText.split(''); 
-      setPuzzleData(newData);
-      setSeedInput(generateSeed(newData));
+      updatePuzzleData(newData);
+      setFeedback({ type: 'success', message: `Cube ${cubeIndex + 1}의 여섯 면을 입력했습니다.` });
+    } else {
+      setFeedback({ type: 'error', message: '붙여넣기는 R, G, P, Y로만 이루어진 여섯 글자여야 합니다.' });
     }
   };
 
@@ -702,39 +871,48 @@ const CustomPuzzleEditor = ({
     const parsed = parseSeed(seedInput);
     if (parsed) {
       setPuzzleData(parsed);
+      setSeedInput(generateSeed(parsed));
+      setShowValidationErrors(false);
+      setFeedback({ type: 'success', message: '시드를 불러왔습니다.' });
     } else {
-      alert("올바르지 않은 시드 코드입니다.");
+      setFeedback({ type: 'error', message: '올바르지 않은 시드 코드입니다.' });
     }
   };
 
-  const handleCopySeed = () => {
+  const handleCopySeed = async () => {
+    const missingFaces = getIncompleteFaces(puzzleData);
+    if (missingFaces.length > 0) {
+      setShowValidationErrors(true);
+      setFeedback({ type: 'error', message: describeIncompleteFaces(missingFaces) });
+      return;
+    }
+
     const seed = generateSeed(puzzleData);
-    navigator.clipboard.writeText(seed).then(() => {
-      alert("시드가 클립보드에 복사되었습니다: " + seed);
-    });
+    try {
+      await navigator.clipboard.writeText(seed);
+      setFeedback({ type: 'success', message: `시드를 복사했습니다: ${seed}` });
+    } catch {
+      setFeedback({ type: 'error', message: '클립보드에 접근할 수 없어 시드를 복사하지 못했습니다.' });
+    }
   };
 
   const handlePlay = () => {
-    const filledData = puzzleData.map(row => 
-      row.map(cell => cell || 'X')
-    );
-    onStart(filledData);
+    const missingFaces = getIncompleteFaces(puzzleData);
+    if (missingFaces.length > 0) {
+      setShowValidationErrors(true);
+      setFeedback({ type: 'error', message: describeIncompleteFaces(missingFaces) });
+      return;
+    }
+
+    onStart(puzzleData.map((faces) => [...faces]));
   };
 
   return (
     <div className="fixed inset-0 h-[100dvh] w-full bg-neutral-900 overflow-hidden overscroll-none touch-none flex flex-col">
-      {/* [수정] 버전 영역 이벤트 변경 (길게 누르기) */}
-      <div 
-        className="absolute top-2 left-2 text-xs text-neutral-600 font-mono z-10 select-none cursor-default touch-none" 
-        onPointerDown={onSecretPressStart}
-        onPointerUp={onSecretPressEnd}
-        onPointerLeave={onSecretPressEnd}
-      >
-        {APP_VERSION}
-      </div>
+      <VersionBadge onPressStart={onSecretPressStart} onPressEnd={onSecretPressEnd} />
 
       <div className="w-full flex-none flex items-center justify-between p-6">
-        <button onClick={onBack} className="p-2 text-white hover:bg-white/10 rounded-full">
+        <button aria-label="홈으로 돌아가기" onClick={onBack} className="p-2 text-white hover:bg-white/10 rounded-full">
           <ChevronLeft size={32} />
         </button>
         <h2 className="text-2xl font-bold text-white">Custom Puzzle Editor</h2>
@@ -746,7 +924,10 @@ const CustomPuzzleEditor = ({
           <input 
             type="text" 
             value={seedInput}
-            onChange={(e) => setSeedInput(e.target.value)}
+            onChange={(e) => {
+              setSeedInput(e.target.value);
+              setFeedback(null);
+            }}
             placeholder="Puzzle Seed Code..."
             className="w-full bg-neutral-800 text-white p-3 rounded-lg border border-neutral-700 font-mono text-sm focus:outline-none focus:border-blue-500"
           />
@@ -759,6 +940,15 @@ const CustomPuzzleEditor = ({
         </button>
       </div>
 
+      {feedback && (
+        <div
+          role={feedback.type === 'error' ? 'alert' : 'status'}
+          className={`w-full max-w-2xl mx-auto px-6 mb-2 text-sm ${feedback.type === 'error' ? 'text-red-300' : 'text-emerald-300'}`}
+        >
+          {feedback.message}
+        </div>
+      )}
+
       <div className="flex-1 w-full overflow-y-auto p-6 pb-32">
         <div className="flex flex-col gap-8 w-full max-w-2xl mx-auto">
           {puzzleData.map((cubeFaces, cubeIdx) => (
@@ -768,50 +958,62 @@ const CustomPuzzleEditor = ({
               <div className="grid grid-cols-4 gap-2 w-max mx-auto">
                 <div className="col-start-2">
                   <FaceInput 
+                    id={`cube-${cubeIdx}-face-0`}
                     value={cubeFaces[0]} 
                     onChange={(v) => handleInputChange(cubeIdx, 0, v)} 
                     onPaste={(e) => handlePaste(cubeIdx, e)}
                     label="Top"
+                    invalid={isFaceInvalid(cubeIdx, 0)}
                   />
                 </div>
                 <div className="col-start-1 row-start-2">
                   <FaceInput 
+                    id={`cube-${cubeIdx}-face-1`}
                     value={cubeFaces[1]} 
                     onChange={(v) => handleInputChange(cubeIdx, 1, v)} 
                     onPaste={(e) => handlePaste(cubeIdx, e)}
                     label="Left"
+                    invalid={isFaceInvalid(cubeIdx, 1)}
                   />
                 </div>
                 <div className="col-start-2 row-start-2">
                   <FaceInput 
+                    id={`cube-${cubeIdx}-face-2`}
                     value={cubeFaces[2]} 
                     onChange={(v) => handleInputChange(cubeIdx, 2, v)} 
                     onPaste={(e) => handlePaste(cubeIdx, e)}
                     label="Front"
+                    invalid={isFaceInvalid(cubeIdx, 2)}
                   />
                 </div>
                 <div className="col-start-3 row-start-2">
                   <FaceInput 
+                    id={`cube-${cubeIdx}-face-3`}
                     value={cubeFaces[3]} 
                     onChange={(v) => handleInputChange(cubeIdx, 3, v)} 
                     onPaste={(e) => handlePaste(cubeIdx, e)}
                     label="Right"
+                    invalid={isFaceInvalid(cubeIdx, 3)}
                   />
                 </div>
                 <div className="col-start-4 row-start-2">
                   <FaceInput 
+                    id={`cube-${cubeIdx}-face-4`}
                     value={cubeFaces[4]} 
                     onChange={(v) => handleInputChange(cubeIdx, 4, v)} 
                     onPaste={(e) => handlePaste(cubeIdx, e)}
                     label="Back"
+                    invalid={isFaceInvalid(cubeIdx, 4)}
                   />
                 </div>
                 <div className="col-start-2 row-start-3">
                   <FaceInput 
+                    id={`cube-${cubeIdx}-face-5`}
                     value={cubeFaces[5]} 
                     onChange={(v) => handleInputChange(cubeIdx, 5, v)} 
                     onPaste={(e) => handlePaste(cubeIdx, e)}
                     label="Bottom"
+                    invalid={isFaceInvalid(cubeIdx, 5)}
                   />
                 </div>
               </div>
@@ -822,7 +1024,7 @@ const CustomPuzzleEditor = ({
 
       <button 
         onClick={handlePlay}
-        className="fixed bottom-8 right-8 bg-green-600 text-white p-4 rounded-full shadow-2xl hover:bg-green-500 transition-all active:scale-95 flex items-center gap-2 font-bold pr-6 z-50"
+        className="fixed bottom-8 right-8 bg-green-700 text-white p-4 rounded-full shadow-2xl hover:bg-green-600 transition-all active:scale-95 flex items-center gap-2 font-bold pr-6 z-50"
       >
         <div className="bg-white/20 p-2 rounded-full">
           <Check size={24} />
@@ -846,15 +1048,7 @@ const HomeScreen = ({
 }) => {
   return (
     <div className="fixed inset-0 h-[100dvh] w-full bg-neutral-900 overflow-hidden touch-none overscroll-none flex flex-col items-center justify-center p-6 space-y-12">
-      {/* [수정] 버전 영역 이벤트 변경 (길게 누르기) */}
-      <div 
-        className="absolute top-2 left-2 text-xs text-neutral-600 font-mono z-10 select-none cursor-default touch-none" 
-        onPointerDown={onSecretPressStart}
-        onPointerUp={onSecretPressEnd}
-        onPointerLeave={onSecretPressEnd}
-      >
-        {APP_VERSION}
-      </div>
+      <VersionBadge onPressStart={onSecretPressStart} onPressEnd={onSecretPressEnd} />
 
       <div className="text-center space-y-2 animate-fade-in-up">
         <h1 className="text-5xl md:text-7xl font-black text-white tracking-widest drop-shadow-2xl" style={{ fontFamily: 'Impact, sans-serif' }}>
@@ -876,7 +1070,7 @@ const HomeScreen = ({
         
         <button 
           onClick={() => onStart(PRESET_PUZZLES.hard)}
-          className="w-full rounded-xl bg-orange-600 p-4 transition-all hover:bg-orange-500 active:scale-95 shadow-lg shadow-orange-900/20 flex items-center justify-center gap-3"
+          className="w-full rounded-xl bg-orange-700 p-4 transition-all hover:bg-orange-600 active:scale-95 shadow-lg shadow-orange-900/20 flex items-center justify-center gap-3"
         >
           <Grid3X3 className="w-5 h-5 text-white" />
           <span className="text-lg font-bold text-white">Puzzle 2</span>
@@ -936,6 +1130,18 @@ const GameScreen = ({
   const [showHint, setShowHint] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [hintStep, setHintStep] = useState(1);
+  const hintButtonRef = useRef<HTMLButtonElement>(null);
+  const mapButtonRef = useRef<HTMLButtonElement>(null);
+
+  const closeHintPanel = useCallback(() => {
+    setShowHint(false);
+    requestAnimationFrame(() => hintButtonRef.current?.focus());
+  }, []);
+
+  const closeMapPanel = useCallback(() => {
+    setShowMap(false);
+    requestAnimationFrame(() => mapButtonRef.current?.focus());
+  }, []);
 
   useEffect(() => {
     const preventScroll = (e: TouchEvent) => {
@@ -971,11 +1177,14 @@ const GameScreen = ({
     setHintStep(1); 
   };
 
-  const handleShare = () => {
-    const seed = generateSeed(puzzleData);
-    navigator.clipboard.writeText(seed).then(() => {
+  const handleShare = async () => {
+    try {
+      const seed = generateSeed(puzzleData);
+      await navigator.clipboard.writeText(seed);
       showToast(`Seed Copied: ${seed}`);
-    });
+    } catch {
+      showToast('클립보드에 접근할 수 없어 시드를 복사하지 못했습니다.');
+    }
   };
 
   const applySolution = (g1: Subgraph, g2: Subgraph) => {
@@ -1007,19 +1216,11 @@ const GameScreen = ({
         }
       `}</style>
 
-      {/* [수정] 버전 영역 이벤트 변경 (길게 누르기) */}
-      <div 
-        className="absolute top-2 left-2 text-xs text-neutral-600 font-mono z-10 select-none cursor-default touch-none" 
-        onPointerDown={onSecretPressStart}
-        onPointerUp={onSecretPressEnd}
-        onPointerLeave={onSecretPressEnd}
-      >
-        {APP_VERSION}
-      </div>
+      <VersionBadge onPressStart={onSecretPressStart} onPressEnd={onSecretPressEnd} />
 
       <HintPanel 
         puzzleData={puzzleData} 
-        onClose={() => setShowHint(false)} 
+        onClose={closeHintPanel}
         onApply={applySolution}
         isOpen={showHint}
         step={hintStep}
@@ -1028,7 +1229,7 @@ const GameScreen = ({
 
       <PuzzleMapOverlay
         puzzleData={puzzleData}
-        onClose={() => setShowMap(false)}
+        onClose={closeMapPanel}
         isOpen={showMap}
       />
 
@@ -1054,27 +1255,30 @@ const GameScreen = ({
         </div>
       </div>
 
-      <div className="absolute bottom-12 flex items-center gap-4 z-20">
-        <button onClick={onHome} className="w-14 h-14 bg-neutral-700 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform border-2 border-neutral-600 hover:bg-neutral-600">
-          <Home size={24} />
+      <div
+        className="absolute inset-x-0 flex items-center justify-center gap-2 px-3 sm:gap-4 sm:px-4 z-20"
+        style={{ bottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+      >
+        <button aria-label="홈으로 이동" onClick={onHome} className="w-12 h-12 sm:w-14 sm:h-14 shrink-0 bg-neutral-700 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform border-2 border-neutral-600 hover:bg-neutral-600">
+          <Home size={22} />
         </button>
         
-        <button onClick={handleReset} className="w-14 h-14 bg-blue-600 rounded-full flex items-center justify-center text-white shadow-xl shadow-blue-900/50 active:scale-95 transition-transform border-2 border-blue-500 hover:bg-blue-500">
-          <RotateCcw size={24} />
+        <button aria-label="퍼즐 초기화" onClick={handleReset} className="w-12 h-12 sm:w-14 sm:h-14 shrink-0 bg-blue-600 rounded-full flex items-center justify-center text-white shadow-xl shadow-blue-900/50 active:scale-95 transition-transform border-2 border-blue-500 hover:bg-blue-500">
+          <RotateCcw size={22} />
         </button>
 
-        <button onClick={() => { setShowMap(!showMap); if (!showMap) setShowHint(false); }} className="w-14 h-14 bg-neutral-700 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform border-2 border-neutral-600 hover:bg-neutral-600">
-          <MapIcon size={24} />
+        <button ref={mapButtonRef} aria-label="퍼즐 맵 보기" aria-pressed={showMap} onClick={() => { setShowMap(!showMap); if (!showMap) setShowHint(false); }} className="w-12 h-12 sm:w-14 sm:h-14 shrink-0 bg-neutral-700 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform border-2 border-neutral-600 hover:bg-neutral-600">
+          <MapIcon size={22} />
         </button>
 
         {isInstructorMode && (
-          <button onClick={() => { setShowHint(!showHint); if (!showHint) setShowMap(false); }} className="w-14 h-14 bg-yellow-500 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform border-2 border-yellow-400 hover:bg-yellow-400 text-black">
-            <Lightbulb size={24} fill="currentColor" />
+          <button ref={hintButtonRef} aria-label="풀이 힌트 보기" aria-pressed={showHint} onClick={() => { setShowHint(!showHint); if (!showHint) setShowMap(false); }} className="w-12 h-12 sm:w-14 sm:h-14 shrink-0 bg-yellow-500 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform border-2 border-yellow-400 hover:bg-yellow-400 text-black">
+            <Lightbulb size={22} fill="currentColor" />
           </button>
         )}
 
-        <button onClick={handleShare} className="w-14 h-14 bg-emerald-600 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform border-2 border-emerald-500 hover:bg-emerald-500">
-          <Share2 size={24} />
+        <button aria-label="퍼즐 시드 복사" onClick={handleShare} className="w-12 h-12 sm:w-14 sm:h-14 shrink-0 bg-emerald-600 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform border-2 border-emerald-500 hover:bg-emerald-500">
+          <Share2 size={22} />
         </button>
       </div>
 
@@ -1129,7 +1333,7 @@ export default function App() {
   return (
     <>
       {toastMsg && (
-        <div className="fixed top-12 left-1/2 -translate-x-1/2 bg-neutral-800/90 text-white px-4 py-2 rounded-full shadow-lg z-[9999] text-sm animate-fade-in-up">
+        <div role="status" aria-live="polite" className="fixed top-12 left-1/2 -translate-x-1/2 bg-neutral-800/90 text-white px-4 py-2 rounded-full shadow-lg z-[9999] text-sm animate-fade-in-up">
           {toastMsg}
         </div>
       )}
