@@ -25,7 +25,15 @@ npm install
 npm run dev
 ```
 
-프로덕션 빌드, 린트, 배포에 필요한 개발 의존성은 현재 정리 중입니다. 관련 작업과 완료 조건은 [REVIEW_CHECKLIST.md](./REVIEW_CHECKLIST.md)를 참고하세요.
+## 품질 검사
+
+```bash
+npm run lint
+npm test
+npm run build
+```
+
+남은 개선 작업과 완료 조건은 [REVIEW_CHECKLIST.md](./REVIEW_CHECKLIST.md)를 참고하세요.
 
 ## 배포
 

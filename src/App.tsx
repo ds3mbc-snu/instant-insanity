@@ -1,5 +1,14 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { RotateCcw, Home, Play, Settings, Grid3X3, ChevronLeft, ChevronRight, Check, Lightbulb, X as XIcon, Map as MapIcon, Share2, Clipboard, ArrowDownToLine } from 'lucide-react';
+import { generateSeed, parseSeed } from './puzzle';
+import { orientGraphSolution, solveGraph, type Edge, type Subgraph } from './solver';
+import {
+  IDENTITY_MATRIX,
+  INITIAL_NORMALS,
+  applyMatrixToVector,
+  getRotationMatrix,
+  multiplyMatrix,
+} from './rotation';
 
 // ==========================================
 // 1. 상수 및 데이터 정의
@@ -31,9 +40,6 @@ const INPUT_COLORS: Record<string, string> = {
   Y: 'bg-yellow-400 text-black', 
   DEFAULT: 'bg-neutral-800 text-neutral-400 border-neutral-600', 
 };
-
-const COLOR_TO_BIT: Record<string, number> = { 'R': 0, 'G': 1, 'P': 2, 'Y': 3, 'X': 0 };
-const BIT_TO_COLOR = ['R', 'G', 'P', 'Y'];
 
 const PUZZLE_1 = [
   ['P', 'G', 'Y', 'R', 'G', 'R'], 
@@ -70,171 +76,11 @@ const PRESET_PUZZLES = {
   custom: PUZZLE_CUSTOM_DEFAULT,
 };
 
-// ==========================================
-// 2. 타입 정의 (Types)
-// ==========================================
-type Edge = { u: string, v: string, cubeIdx: number, pairIdx: number };
-type Subgraph = Edge[];
-
 interface PlatformProps {
   onRotateStart: () => void;
   onRotate: (delta: number) => void;
   onRotateEnd: () => void;
 }
-
-// ==========================================
-// 3. 유틸리티 함수 (Math & Logic)
-// ==========================================
-const IDENTITY_MATRIX = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
-
-const generateSeed = (data: string[][]): string => {
-  let seed = "";
-  for (const cube of data) {
-    let val = 0;
-    for (let i = 0; i < 6; i++) {
-      const colorChar = cube[i] || 'R'; 
-      const bit = COLOR_TO_BIT[colorChar] || 0;
-      val = (val << 2) | bit;
-    }
-    seed += val.toString(16).toUpperCase().padStart(3, '0');
-  }
-  return seed;
-};
-
-const parseSeed = (seed: string): string[][] | null => {
-  const cleanSeed = seed.replace(/[^0-9A-F]/gi, '').toUpperCase();
-  if (cleanSeed.length !== 12) return null;
-
-  const result: string[][] = [];
-  try {
-    for (let i = 0; i < 4; i++) {
-      const chunk = cleanSeed.slice(i * 3, (i + 1) * 3);
-      const val = parseInt(chunk, 16);
-      const faces: string[] = [];
-      for (let j = 5; j >= 0; j--) {
-        const bit = (val >> (j * 2)) & 3; 
-        faces.push(BIT_TO_COLOR[bit]);
-      }
-      result.push(faces);
-    }
-    return result;
-  } catch (e) {
-    return null;
-  }
-};
-
-const multiplyMatrix = (a: number[], b: number[]) => {
-  const out = new Array(16).fill(0);
-  for (let i = 0; i < 4; i++) { 
-    for (let j = 0; j < 4; j++) { 
-      let sum = 0;
-      for (let k = 0; k < 4; k++) sum += a[k * 4 + i] * b[j * 4 + k];
-      out[j * 4 + i] = sum;
-    }
-  }
-  return out;
-};
-
-const applyMatrixToVector = (m: number[], v: number[]) => {
-  const out = [0, 0, 0, 0];
-  for (let i = 0; i < 4; i++) {
-    let sum = 0;
-    for (let j = 0; j < 4; j++) sum += m[j * 4 + i] * v[j];
-    out[i] = sum;
-  }
-  return out;
-};
-
-const getRotationMatrix = (axis: 'x' | 'y' | 'z', angle: number) => {
-  const rad = (angle * Math.PI) / 180;
-  const s = Math.sin(rad);
-  const c = Math.cos(rad);
-  const m = [...IDENTITY_MATRIX];
-  if (axis === 'x') { m[5] = c; m[9] = -s; m[6] = s; m[10] = c; }
-  else if (axis === 'y') { m[0] = c; m[8] = s; m[2] = -s; m[10] = c; }
-  else { m[0] = c; m[4] = -s; m[1] = s; m[5] = c; }
-  return m;
-};
-
-const getAllRotations = () => {
-  const rotations: number[][] = [];
-  const faceToFront = [
-    getRotationMatrix('y', 0),    
-    getRotationMatrix('y', 180),  
-    getRotationMatrix('y', -90),  
-    getRotationMatrix('y', 90),   
-    getRotationMatrix('x', 90),   
-    getRotationMatrix('x', -90),  
-  ];
-
-  faceToFront.forEach(m1 => {
-    [0, 90, 180, 270].forEach(angle => {
-      const m2 = getRotationMatrix('z', angle);
-      rotations.push(multiplyMatrix(m2, m1));
-    });
-  });
-  
-  return rotations;
-};
-
-const INITIAL_NORMALS = [
-  [0, -1, 0, 0], [-1, 0, 0, 0], [0, 0, 1, 0], 
-  [1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0]
-];
-
-// --- Graph Solver Logic ---
-const extractEdges = (puzzleData: string[][]): Edge[] => {
-  const edges: Edge[] = [];
-  puzzleData.forEach((colors, cubeIdx) => {
-    const pairs = [[0, 5], [1, 3], [2, 4]];
-    pairs.forEach((p, pairIdx) => {
-      edges.push({ u: colors[p[0]], v: colors[p[1]], cubeIdx, pairIdx });
-    });
-  });
-  return edges;
-};
-
-const findRegularSubgraph = (edges: Edge[], excludedEdges: Edge[] = []): Subgraph | null => {
-  const cubeEdges = [0, 1, 2, 3].map(c => 
-    edges.filter(e => e.cubeIdx === c && !excludedEdges.includes(e))
-  );
-
-  const currentSelection: Edge[] = [];
-  const degrees: Record<string, number> = {};
-
-  const solve = (depth: number): boolean => {
-    if (depth === 4) {
-      return Object.values(degrees).every(d => d === 2);
-    }
-
-    for (const edge of cubeEdges[depth]) {
-      degrees[edge.u] = (degrees[edge.u] || 0) + 1;
-      degrees[edge.v] = (degrees[edge.v] || 0) + 1;
-      currentSelection.push(edge);
-
-      if (degrees[edge.u] <= 2 && degrees[edge.v] <= 2) {
-        if (solve(depth + 1)) return true;
-      }
-
-      currentSelection.pop();
-      degrees[edge.u]--;
-      degrees[edge.v]--;
-    }
-    return false;
-  };
-
-  if (solve(0)) return [...currentSelection];
-  return null;
-};
-
-const solveGraph = (puzzleData: string[][]) => {
-  const allEdges = extractEdges(puzzleData);
-  const g1 = findRegularSubgraph(allEdges);
-  if (!g1) return null;
-  const g2 = findRegularSubgraph(allEdges, g1);
-  if (!g2) return null;
-  return { g1, g2, allEdges };
-};
 
 // ==========================================
 // 4. 서브 컴포넌트 (UI Parts)
@@ -280,15 +126,13 @@ const HintPanel = ({
       const isLoop = e.u === e.v;
       const offset = (e.cubeIdx - 1.5) * 40; 
       
-      let pathD = '';
-      let labelX = 0;
-      let labelY = 0;
+      let pathD: string;
+      let labelX: number;
+      let labelY: number;
 
       if (isLoop) {
-        let dirX = 0;
-        let dirY = 0;
-        if (p1.x < 150) dirX = -1; else dirX = 1;
-        if (p1.y < 150) dirY = -1; else dirY = 1;
+        const dirX = p1.x < 150 ? -1 : 1;
+        const dirY = p1.y < 150 ? -1 : 1;
 
         const loopSize = 50 + Math.abs(offset * 0.5); 
         const twist = (e.cubeIdx % 2 ? 15 : -15); 
@@ -512,7 +356,9 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault(); e.stopPropagation();
-    try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch {
+      // Pointer capture may be unavailable for an interrupted gesture.
+    }
     
     isDragging.current = true;
     startX.current = e.clientX;
@@ -532,7 +378,9 @@ const Platform = ({ onRotateStart, onRotate, onRotateEnd }: PlatformProps) => {
 
   const handlePointerUp = (e: React.PointerEvent) => {
     if (!isDragging.current) return;
-    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {
+      // The pointer may already have been released by the browser.
+    }
     
     isDragging.current = false;
     onRotateEnd();
@@ -598,7 +446,9 @@ const Cube = ({
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault(); e.stopPropagation();
-    try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch {
+      // Pointer capture may be unavailable for an interrupted gesture.
+    }
     
     const target = e.target as HTMLElement;
     const faceEl = target.closest('[data-face-index]');
@@ -637,16 +487,14 @@ const Cube = ({
       const absZ = Math.abs(nz);
       const max = Math.max(absX, absY, absZ);
 
-      let targetWorldAxis: 'x' | 'y' | 'z' = 'y';
-      let worldSign = 1;
-      let shouldUseHorizontalDrag = false;
+      let targetWorldAxis: 'x' | 'y' | 'z';
+      let worldSign: number;
 
       const isHorz = Math.abs(diffX) > Math.abs(diffY);
 
       if (max === absY) {
         if (isHorz) {
           targetWorldAxis = 'z';
-          shouldUseHorizontalDrag = true;
           worldSign = 1;
         } else {
           targetWorldAxis = 'x';
@@ -656,7 +504,6 @@ const Cube = ({
       else if (max === absX) {
         if (isHorz) {
           targetWorldAxis = 'y';
-          shouldUseHorizontalDrag = true;
           worldSign = 1; 
         } else {
           targetWorldAxis = 'z';
@@ -666,7 +513,6 @@ const Cube = ({
       else {
         if (isHorz) {
           targetWorldAxis = 'y';
-          shouldUseHorizontalDrag = true;
           worldSign = 1;
         } else {
           targetWorldAxis = 'x';
@@ -675,10 +521,11 @@ const Cube = ({
       }
 
       const invTowerMatrix = getRotationMatrix('y', -towerRotation);
-      let worldAxisVec = [0,0,0,0];
-      if (targetWorldAxis === 'x') worldAxisVec = [1,0,0,0];
-      if (targetWorldAxis === 'y') worldAxisVec = [0,1,0,0];
-      if (targetWorldAxis === 'z') worldAxisVec = [0,0,1,0];
+      const worldAxisVec = targetWorldAxis === 'x'
+        ? [1, 0, 0, 0]
+        : targetWorldAxis === 'y'
+          ? [0, 1, 0, 0]
+          : [0, 0, 1, 0];
 
       const localAxisVec = applyMatrixToVector(invTowerMatrix, worldAxisVec);
       
@@ -687,8 +534,8 @@ const Cube = ({
       const lz = localAxisVec[2];
       const maxL = Math.max(Math.abs(lx), Math.abs(ly), Math.abs(lz));
 
-      let finalAxis: 'x'|'y'|'z' = 'x';
-      let mappingSign = 1;
+      let finalAxis: 'x'|'y'|'z';
+      let mappingSign: number;
 
       if (maxL === Math.abs(lx)) {
         finalAxis = 'x';
@@ -702,12 +549,12 @@ const Cube = ({
       }
 
       activeAxis.current = finalAxis;
-      rotationSign.current = worldSign * mappingSign * (shouldUseHorizontalDrag ? 1 : 1);
+      rotationSign.current = worldSign * mappingSign;
       return;
     }
 
     const isHorz = Math.abs(diffX) > Math.abs(diffY);
-    let val = isHorz ? diffX : diffY;
+    const val = isHorz ? diffX : diffY;
     const delta = val * DRAG_SENSITIVITY * rotationSign.current;
 
     setCurrentDragAngle({ axis: activeAxis.current, val: delta });
@@ -715,7 +562,9 @@ const Cube = ({
 
   const handlePointerUp = (e: React.PointerEvent) => {
     if (!isDragging) return;
-    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {
+      // The pointer may already have been released by the browser.
+    }
     
     setIsDragging(false);
     
@@ -1101,6 +950,7 @@ const GameScreen = ({
 
   useEffect(() => {
     if (!isInstructorMode) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Parent mode changes intentionally close the local hint panel.
       setShowHint(false);
     }
   }, [isInstructorMode]);
@@ -1129,71 +979,10 @@ const GameScreen = ({
   };
 
   const applySolution = (g1: Subgraph, g2: Subgraph) => {
-    const allRotations = getAllRotations();
-    
-    const getLocalAxisVector = (pairIdx: number) => {
-      if (pairIdx === 0) return [0, 1, 0, 0]; 
-      if (pairIdx === 1) return [1, 0, 0, 0]; 
-      if (pairIdx === 2) return [0, 0, 1, 0]; 
-      return [0, 0, 0, 0];
-    };
+    const solutionMatrices = orientGraphSolution(puzzleData, g1, g2);
 
-    const cubeCandidates = puzzleData.map((_, cubeIdx) => {
-      const e1 = g1.find(e => e.cubeIdx === cubeIdx); 
-      const e2 = g2.find(e => e.cubeIdx === cubeIdx); 
-      
-      if (!e1 || !e2) return [IDENTITY_MATRIX];
-
-      const axis1 = getLocalAxisVector(e1.pairIdx); 
-      const axis2 = getLocalAxisVector(e2.pairIdx); 
-
-      const candidates: number[][] = [];
-
-      for (const m of allRotations) {
-        const v1 = applyMatrixToVector(m, axis1);
-        const onZ = Math.abs(v1[0]) < 0.1 && Math.abs(v1[1]) < 0.1 && Math.abs(Math.abs(v1[2]) - 1) < 0.1;
-        const v2 = applyMatrixToVector(m, axis2);
-        const onX = Math.abs(Math.abs(v2[0]) - 1) < 0.1 && Math.abs(v2[1]) < 0.1 && Math.abs(v2[2]) < 0.1;
-
-        if (onZ && onX) candidates.push(m);
-      }
-      return candidates;
-    });
-
-    const finalSolution: number[][] = [];
-    
-    const solveOrientation = (depth: number, usedFront: Record<string, number>, usedLeft: Record<string, number>): boolean => {
-      if (depth === 4) return true;
-
-      const candidates = cubeCandidates[depth];
-      const currentColors = puzzleData[depth];
-
-      for (const m of candidates) {
-        let frontColor = '';
-        let leftColor = '';
-
-        for (let i = 0; i < 6; i++) {
-          const worldNormal = applyMatrixToVector(m, INITIAL_NORMALS[i]);
-          if (worldNormal[2] > 0.9) frontColor = currentColors[i];
-          if (worldNormal[0] < -0.9) leftColor = currentColors[i];
-        }
-
-        if (usedFront[frontColor] || usedLeft[leftColor]) continue;
-
-        usedFront[frontColor] = 1;
-        usedLeft[leftColor] = 1;
-        finalSolution[depth] = m;
-
-        if (solveOrientation(depth + 1, usedFront, usedLeft)) return true;
-
-        usedFront[frontColor] = 0;
-        usedLeft[leftColor] = 0;
-      }
-      return false;
-    };
-
-    if (solveOrientation(0, {}, {})) {
-      setCubeMatrices([...finalSolution]);
+    if (solutionMatrices) {
+      setCubeMatrices(solutionMatrices);
       setTowerRotation(0);
       setShowHint(false);
     } else {
