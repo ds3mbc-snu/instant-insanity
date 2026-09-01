@@ -1,73 +1,36 @@
-# React + TypeScript + Vite
+# Instant Insanity
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+네 개의 큐브를 쌓고 회전해, 탑의 앞·뒤·왼쪽·오른쪽 각 면에 네 가지 색이 한 번씩 나타나도록 맞추는 웹 퍼즐입니다.
 
-Currently, two official plugins are available:
+## 주요 기능
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- 난이도별 기본 퍼즐 3종
+- 큐브 및 전체 탑의 3D 드래그 회전
+- 사용자 정의 퍼즐과 12자리 시드 코드
+- 퍼즐 전개도 보기
+- 강의자 모드의 그래프 기반 힌트 및 해답 적용
 
-## React Compiler
+## 기술 구성
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- React 19
+- TypeScript
+- Vite
+- Tailwind CSS
+- Lucide React
 
-## Expanding the ESLint configuration
+## 로컬 실행
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+프로덕션 빌드, 린트, 배포에 필요한 개발 의존성은 현재 정리 중입니다. 관련 작업과 완료 조건은 [REVIEW_CHECKLIST.md](./REVIEW_CHECKLIST.md)를 참고하세요.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 배포
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+GitHub Pages의 `/instant-insanity/` 경로를 기준으로 Vite가 구성되어 있습니다. 의존성 체크리스트를 완료한 뒤 다음 명령으로 배포할 수 있습니다.
+
+```bash
+npm run deploy
 ```
