@@ -797,7 +797,6 @@ const CubeFace = ({
         transform, 
         backfaceVisibility: 'hidden', 
         WebkitBackfaceVisibility: 'hidden',
-        willChange: 'transform',
         pointerEvents: 'auto' 
       }}
       onPointerDown={onPointerDown}

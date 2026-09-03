@@ -53,6 +53,8 @@ describe('main user flow', () => {
 
     expect(frontFace.style.transform).toBe('translateZ(50px)');
     expect(frontFace.style.outline).toBe('');
+    expect(frontFace.style.willChange).toBe('');
+    expect(cube.style.willChange).toBe('transform');
     expect(frontFace.firstElementChild?.classList.contains('bg-white/10')).toBe(true);
 
     fireEvent.pointerDown(frontFace, { pointerId: 1, clientX: 100, clientY: 100 });
