@@ -16,7 +16,9 @@ import {
   applyMatrixToVector,
   getRotationMatrix,
   getSnappedDragAngle,
+  interpolateRotationMatrix,
   multiplyMatrix,
+  normalizeRotationMatrix,
 } from './rotation';
 
 // ==========================================
@@ -746,7 +748,7 @@ const Cube = ({
     displayMatrix = multiplyMatrix(tempRot, matrix);
   }
 
-  const halfSize = CUBE_SIZE / 2 - 0.5;
+  const halfSize = CUBE_SIZE / 2;
 
   return (
     <div 
@@ -760,6 +762,7 @@ const Cube = ({
         transformStyle: 'preserve-3d',
         transform: `translateY(${(id - 1.5) * (CUBE_SIZE + GAP)}px) matrix3d(${displayMatrix.join(',')})`,
         transition: 'none',
+        willChange: 'transform',
         zIndex: isDragging ? 100 : baseZIndex, 
         pointerEvents: 'none' 
       }}
@@ -794,7 +797,7 @@ const CubeFace = ({
         transform, 
         backfaceVisibility: 'hidden', 
         WebkitBackfaceVisibility: 'hidden',
-        outline: '2px solid black',
+        willChange: 'transform',
         pointerEvents: 'auto' 
       }}
       onPointerDown={onPointerDown}
@@ -803,7 +806,7 @@ const CubeFace = ({
       onPointerCancel={onPointerCancel}
       onLostPointerCapture={onLostPointerCapture}
     >
-      <div className="w-full h-full bg-gradient-to-br from-white/30 to-black/10 pointer-events-none absolute inset-0" />
+      <div className="w-full h-full bg-white/10 pointer-events-none absolute inset-0" />
     </div>
   );
 };
@@ -1170,6 +1173,8 @@ const GameScreen = ({
   const [cubeMatrices, setCubeMatrices] = useState<number[][]>(
     puzzleData.map(() => [...IDENTITY_MATRIX])
   );
+  const cubeMatricesRef = useRef(cubeMatrices);
+  const solutionAnimationFrameRef = useRef<number | null>(null);
   const [towerRotation, setTowerRotation] = useState(0);
   const [isTowerDragging, setIsTowerDragging] = useState(false);
   
@@ -1200,6 +1205,12 @@ const GameScreen = ({
     return () => document.removeEventListener('touchmove', preventScroll);
   }, []);
 
+  useEffect(() => () => {
+    if (solutionAnimationFrameRef.current !== null) {
+      cancelAnimationFrame(solutionAnimationFrameRef.current);
+    }
+  }, []);
+
   useEffect(() => {
     if (!isInstructorMode) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- Parent mode changes intentionally close the local hint panel.
@@ -1208,15 +1219,28 @@ const GameScreen = ({
   }, [isInstructorMode]);
 
   const handleRotate = (id: number, newMatrix: number[]) => {
+    if (solutionAnimationFrameRef.current !== null) {
+      cancelAnimationFrame(solutionAnimationFrameRef.current);
+      solutionAnimationFrameRef.current = null;
+    }
+
     setCubeMatrices(prev => {
       const next = [...prev];
-      next[id] = newMatrix;
+      next[id] = normalizeRotationMatrix(newMatrix);
+      cubeMatricesRef.current = next;
       return next;
     });
   };
 
   const handleReset = () => {
-    setCubeMatrices(puzzleData.map(() => [...IDENTITY_MATRIX]));
+    if (solutionAnimationFrameRef.current !== null) {
+      cancelAnimationFrame(solutionAnimationFrameRef.current);
+      solutionAnimationFrameRef.current = null;
+    }
+
+    const resetMatrices = puzzleData.map(() => [...IDENTITY_MATRIX]);
+    cubeMatricesRef.current = resetMatrices;
+    setCubeMatrices(resetMatrices);
     setTowerRotation(0);
     setShowHint(false);
     setShowMap(false);
@@ -1237,7 +1261,35 @@ const GameScreen = ({
     const solutionMatrices = orientGraphSolution(puzzleData, g1, g2);
 
     if (solutionMatrices) {
-      setCubeMatrices(solutionMatrices);
+      if (solutionAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(solutionAnimationFrameRef.current);
+      }
+
+      const startMatrices = cubeMatricesRef.current.map((matrix) => [...matrix]);
+      const targetMatrices = solutionMatrices.map((matrix) => normalizeRotationMatrix(matrix));
+      const startedAt = performance.now();
+      const duration = 650;
+
+      const animateSolution = (timestamp: number) => {
+        const progress = Math.min(1, Math.max(0, (timestamp - startedAt) / duration));
+        const easedProgress = progress < 0.5
+          ? 4 * progress * progress * progress
+          : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+        const nextMatrices = startMatrices.map((matrix, index) =>
+          interpolateRotationMatrix(matrix, targetMatrices[index], easedProgress),
+        );
+
+        cubeMatricesRef.current = nextMatrices;
+        setCubeMatrices(nextMatrices);
+
+        if (progress < 1) {
+          solutionAnimationFrameRef.current = requestAnimationFrame(animateSolution);
+        } else {
+          solutionAnimationFrameRef.current = null;
+        }
+      };
+
+      solutionAnimationFrameRef.current = requestAnimationFrame(animateSolution);
       setTowerRotation(0);
       setShowHint(false);
     } else {

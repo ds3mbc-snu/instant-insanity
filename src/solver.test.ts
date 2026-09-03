@@ -3,8 +3,12 @@ import { parseSeed } from './puzzle';
 import {
   applyMatrixToVector,
   getAllRotations,
+  getRotationMatrix,
   getSnappedDragAngle,
+  IDENTITY_MATRIX,
   INITIAL_NORMALS,
+  interpolateRotationMatrix,
+  normalizeRotationMatrix,
 } from './rotation';
 import {
   orientGraphSolution,
@@ -137,5 +141,41 @@ describe('cube rotations', () => {
 
     expect(rotations).toHaveLength(24);
     expect(new Set(normalizedMatrices).size).toBe(24);
+  });
+
+  it('interpolates solution rotations without deforming the cube', () => {
+    const halfway = interpolateRotationMatrix(
+      IDENTITY_MATRIX,
+      getRotationMatrix('y', 180),
+      0.5,
+    );
+    const xAxis = halfway.slice(0, 3);
+    const yAxis = halfway.slice(4, 7);
+    const zAxis = halfway.slice(8, 11);
+    const dot = (a: number[], b: number[]) => a.reduce(
+      (sum, value, index) => sum + value * b[index],
+      0,
+    );
+    const determinant =
+      xAxis[0] * (yAxis[1] * zAxis[2] - yAxis[2] * zAxis[1])
+      - yAxis[0] * (xAxis[1] * zAxis[2] - xAxis[2] * zAxis[1])
+      + zAxis[0] * (xAxis[1] * yAxis[2] - xAxis[2] * yAxis[1]);
+
+    expect(Math.hypot(...xAxis)).toBeCloseTo(1, 10);
+    expect(Math.hypot(...yAxis)).toBeCloseTo(1, 10);
+    expect(Math.hypot(...zAxis)).toBeCloseTo(1, 10);
+    expect(dot(xAxis, yAxis)).toBeCloseTo(0, 10);
+    expect(dot(xAxis, zAxis)).toBeCloseTo(0, 10);
+    expect(dot(yAxis, zAxis)).toBeCloseTo(0, 10);
+    expect(determinant).toBeCloseTo(1, 10);
+  });
+
+  it('finishes an interpolated rotation on an exact quarter-turn matrix', () => {
+    const target = getRotationMatrix('x', 270);
+
+    expect(interpolateRotationMatrix(IDENTITY_MATRIX, target, 1)).toEqual(
+      normalizeRotationMatrix(target),
+    );
+    expect(normalizeRotationMatrix(target).every((value) => [-1, 0, 1].includes(value))).toBe(true);
   });
 });
