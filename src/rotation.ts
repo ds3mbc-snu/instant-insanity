@@ -70,6 +70,9 @@ export const getRotationMatrix = (axis: 'x' | 'y' | 'z', angle: number) => {
   return matrix;
 };
 
+export const getSnappedDragAngle = (angle: number) =>
+  Math.sign(angle) * Math.round(Math.abs(angle) / 90) * 90;
+
 export const getAllRotations = () => {
   const rotations: number[][] = [];
   const faceToFront = [

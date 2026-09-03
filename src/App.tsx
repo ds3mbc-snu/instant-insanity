@@ -15,13 +15,14 @@ import {
   INITIAL_NORMALS,
   applyMatrixToVector,
   getRotationMatrix,
+  getSnappedDragAngle,
   multiplyMatrix,
 } from './rotation';
 
 // ==========================================
 // 1. 상수 및 데이터 정의
 // ==========================================
-const APP_VERSION = "v1.0.14"; // [수정] 길게 누르기(Long Press) 로직 적용
+const APP_VERSION = "v1.0.15";
 const CUBE_SIZE = 100;
 const GAP = 10;
 const DRAG_SENSITIVITY = 0.8; 
@@ -538,11 +539,22 @@ const Cube = ({
   const [currentDragAngle, setCurrentDragAngle] = useState<{ axis: 'x' | 'y' | 'z', val: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false); 
   
+  const isDraggingRef = useRef(false);
   const activeAxis = useRef<'x' | 'y' | 'z' | null>(null);
+  const dragComponent = useRef<'x' | 'y' | null>(null);
   const rotationSign = useRef(1);
   const touchedFaceIndex = useRef<number | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+  }, []);
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    if (animationFrameRef.current !== null) return;
+
     e.preventDefault(); e.stopPropagation();
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch {
       // Pointer capture may be unavailable for an interrupted gesture.
@@ -554,7 +566,9 @@ const Cube = ({
     
     touchedFaceIndex.current = faceIndex;
     startPos.current = { x: e.clientX, y: e.clientY };
+    isDraggingRef.current = true;
     activeAxis.current = null;
+    dragComponent.current = null;
     rotationSign.current = 1;
     
     setIsDragging(true);
@@ -562,7 +576,7 @@ const Cube = ({
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDragging) return;
+    if (!isDraggingRef.current) return;
     e.preventDefault();
 
     const diffX = e.clientX - startPos.current.x;
@@ -589,6 +603,7 @@ const Cube = ({
       let worldSign: number;
 
       const isHorz = Math.abs(diffX) > Math.abs(diffY);
+      dragComponent.current = isHorz ? 'x' : 'y';
 
       if (max === absY) {
         if (isHorz) {
@@ -648,35 +663,63 @@ const Cube = ({
 
       activeAxis.current = finalAxis;
       rotationSign.current = worldSign * mappingSign;
-      return;
     }
 
-    const isHorz = Math.abs(diffX) > Math.abs(diffY);
-    const val = isHorz ? diffX : diffY;
+    const val = dragComponent.current === 'x' ? diffX : diffY;
     const delta = val * DRAG_SENSITIVITY * rotationSign.current;
 
-    setCurrentDragAngle({ axis: activeAxis.current, val: delta });
+    if (activeAxis.current) {
+      setCurrentDragAngle({ axis: activeAxis.current, val: delta });
+    }
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    if (!isDragging) return;
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
+
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {
       // The pointer may already have been released by the browser.
     }
-    
-    setIsDragging(false);
-    
-    if (currentDragAngle && activeAxis.current) {
-      const snapAngle = Math.round(currentDragAngle.val / 90) * 90;
-      if (snapAngle !== 0) {
-        const rotMat = getRotationMatrix(activeAxis.current, snapAngle);
-        const newMatrix = multiplyMatrix(rotMat, matrix);
-        onRotate(id, newMatrix);
-      }
+
+    if (!currentDragAngle || !activeAxis.current) {
+      setIsDragging(false);
+      setCurrentDragAngle(null);
+      activeAxis.current = null;
+      dragComponent.current = null;
+      return;
     }
 
-    activeAxis.current = null;
-    setCurrentDragAngle(null);
+    const axis = activeAxis.current;
+    const fromAngle = currentDragAngle.val;
+    const snapAngle = getSnappedDragAngle(fromAngle);
+    const startedAt = performance.now();
+    const duration = Math.max(100, Math.min(220, Math.abs(snapAngle - fromAngle) * 3));
+
+    const finishSnap = () => {
+      if (snapAngle !== 0) {
+        onRotate(id, multiplyMatrix(getRotationMatrix(axis, snapAngle), matrix));
+      }
+      animationFrameRef.current = null;
+      activeAxis.current = null;
+      dragComponent.current = null;
+      setCurrentDragAngle(null);
+      setIsDragging(false);
+    };
+
+    const animateSnap = (timestamp: number) => {
+      const progress = Math.min(1, (timestamp - startedAt) / duration);
+      const easedProgress = 1 - Math.pow(1 - progress, 3);
+      const angle = fromAngle + (snapAngle - fromAngle) * easedProgress;
+      setCurrentDragAngle({ axis, val: angle });
+
+      if (progress < 1) {
+        animationFrameRef.current = requestAnimationFrame(animateSnap);
+      } else {
+        finishSnap();
+      }
+    };
+
+    animationFrameRef.current = requestAnimationFrame(animateSnap);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
@@ -716,30 +759,32 @@ const Cube = ({
         height: `${CUBE_SIZE}px`,
         transformStyle: 'preserve-3d',
         transform: `translateY(${(id - 1.5) * (CUBE_SIZE + GAP)}px) matrix3d(${displayMatrix.join(',')})`,
-        transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
+        transition: 'none',
         zIndex: isDragging ? 100 : baseZIndex, 
         pointerEvents: 'none' 
       }}
       onKeyDown={handleKeyDown}
     >
-      <CubeFace index={0} color={colors[0]} transform={`rotateX(90deg) translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} />
-      <CubeFace index={1} color={colors[1]} transform={`rotateY(-90deg) translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} />
-      <CubeFace index={2} color={colors[2]} transform={`translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} />
-      <CubeFace index={3} color={colors[3]} transform={`rotateY(90deg) translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} />
-      <CubeFace index={4} color={colors[4]} transform={`rotateY(180deg) translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} />
-      <CubeFace index={5} color={colors[5]} transform={`rotateX(-90deg) translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} />
+      <CubeFace index={0} color={colors[0]} transform={`rotateX(90deg) translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp} onLostPointerCapture={handlePointerUp} />
+      <CubeFace index={1} color={colors[1]} transform={`rotateY(-90deg) translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp} onLostPointerCapture={handlePointerUp} />
+      <CubeFace index={2} color={colors[2]} transform={`translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp} onLostPointerCapture={handlePointerUp} />
+      <CubeFace index={3} color={colors[3]} transform={`rotateY(90deg) translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp} onLostPointerCapture={handlePointerUp} />
+      <CubeFace index={4} color={colors[4]} transform={`rotateY(180deg) translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp} onLostPointerCapture={handlePointerUp} />
+      <CubeFace index={5} color={colors[5]} transform={`rotateX(-90deg) translateZ(${halfSize}px)`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp} onLostPointerCapture={handlePointerUp} />
     </div>
   );
 };
 
 const CubeFace = ({ 
   index, color, transform, 
-  onPointerDown, onPointerMove, onPointerUp 
+  onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onLostPointerCapture,
 }: { 
   index: number, color: string, transform: string,
   onPointerDown: (e: React.PointerEvent) => void,
   onPointerMove: (e: React.PointerEvent) => void,
-  onPointerUp: (e: React.PointerEvent) => void
+  onPointerUp: (e: React.PointerEvent) => void,
+  onPointerCancel: (e: React.PointerEvent) => void,
+  onLostPointerCapture: (e: React.PointerEvent) => void,
 }) => {
   return (
     <div
@@ -755,7 +800,8 @@ const CubeFace = ({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerLeave={onPointerUp} 
+      onPointerCancel={onPointerCancel}
+      onLostPointerCapture={onLostPointerCapture}
     >
       <div className="w-full h-full bg-gradient-to-br from-white/30 to-black/10 pointer-events-none absolute inset-0" />
     </div>

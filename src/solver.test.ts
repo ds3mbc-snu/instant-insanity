@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { parseSeed } from './puzzle';
-import { applyMatrixToVector, getAllRotations, INITIAL_NORMALS } from './rotation';
+import {
+  applyMatrixToVector,
+  getAllRotations,
+  getSnappedDragAngle,
+  INITIAL_NORMALS,
+} from './rotation';
 import {
   orientGraphSolution,
   solveGraph,
@@ -114,6 +119,16 @@ describe('graph solver', () => {
 });
 
 describe('cube rotations', () => {
+  it('snaps an unrestricted drag to the nearest quarter turn', () => {
+    expect(getSnappedDragAngle(44.9)).toBe(0);
+    expect(getSnappedDragAngle(45)).toBe(90);
+    expect(getSnappedDragAngle(180)).toBe(180);
+    expect(getSnappedDragAngle(280)).toBe(270);
+    expect(getSnappedDragAngle(-45)).toBe(-90);
+    expect(getSnappedDragAngle(-180)).toBe(-180);
+    expect(getSnappedDragAngle(-280)).toBe(-270);
+  });
+
   it('generates all 24 unique cube orientations', () => {
     const rotations = getAllRotations();
     const normalizedMatrices = rotations.map((matrix) =>
